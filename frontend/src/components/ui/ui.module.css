@@ -1,0 +1,252 @@
+/* Logo — Figma "Logo": 14px dot + Bold 17px */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* Button — Figma "Button": pill, 12/22 padding, SemiBold 14 */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 18px;
+  white-space: nowrap;
+  transition:
+    transform 0.2s var(--ease-out),
+    background-color 0.2s,
+    box-shadow 0.2s,
+    opacity 0.2s;
+}
+.button:active {
+  transform: scale(0.97);
+}
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.primary:hover:not(:disabled) {
+  background: #c22a5f;
+  box-shadow: 0 8px 20px rgba(214, 51, 108, 0.28);
+}
+.outline {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+.outline:hover:not(:disabled) {
+  border-color: #cfcbd2;
+  background: var(--bg);
+}
+.ghost {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+}
+.ghost:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--bg);
+}
+.block {
+  width: 100%;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Segmented nav — Figma top bar pills */
+.segmented {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.segment {
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 16px;
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+.segment:hover {
+  color: var(--ink);
+}
+.segmentActive {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.segmentActive:hover {
+  color: #fff;
+}
+.segmentDisabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Day picker — 32px circles */
+.days {
+  display: flex;
+  gap: 6px;
+}
+.day {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  color: var(--day-color, var(--ink));
+  transition:
+    background-color 0.2s,
+    color 0.2s,
+    transform 0.2s var(--ease-out);
+}
+.day:hover {
+  transform: translateY(-1px);
+}
+.dayActive {
+  background: var(--day-color, var(--accent));
+  border-color: transparent;
+  color: #fff;
+}
+.dayDrop {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--day-color, var(--accent)) 30%, transparent);
+  transform: scale(1.12);
+}
+
+/* Slider — Figma "Slider": 4px track, 16px thumb with 3px pink ring */
+.slider {
+  --pct: 50%;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  margin: 0;
+  cursor: pointer;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--pct), var(--line) var(--pct));
+}
+.slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--pct), var(--line) var(--pct));
+}
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  transition: transform 0.15s;
+}
+.slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+}
+.slider:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+/* Status pill — Figma Trained / Training / Queued */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+.pillOk {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.pillWarn {
+  background: var(--golden-bg);
+  color: var(--golden);
+}
+.pillNeutral {
+  background: var(--neutral-bg);
+  color: var(--muted);
+}
+.pillBad {
+  background: #fce8e6;
+  color: #c5221f;
+}
+.pillAccent {
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+.pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+/* Estimated tag */
+.estimated {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted);
+}
+.confDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}

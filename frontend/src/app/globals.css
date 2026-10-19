@@ -1,0 +1,135 @@
+/* Design tokens from Figma "ChronoTrip AI – Product Design" */
+:root {
+  --ink: #1d1b1e;
+  --muted: #5e5a60;
+  --line: #e2e0e3;
+  --bg: #f6f6f7;
+  --surface: #ffffff;
+  --accent: #d6336c;
+  --accent-soft: #e88aae;
+  --accent-tint: #fbe7ef;
+  --day-1: #d6336c;
+  --day-2: #1a73e8;
+  --day-3: #188038;
+  --golden: #b06000;
+  --golden-bg: #fef3e2;
+  --ok: #137333;
+  --ok-bg: #e6f4ea;
+  --neutral-bg: #f1f1f3;
+  --bar: #cfcdd3;
+  --pin-idle: #9aa0a6;
+  --pin-other: #8ab4f8;
+  --map-land: #e6e4df;
+  --map-ward-1: #f7f5f0;
+  --map-ward-2: #f4f1eb;
+  --map-ward-3: #eeeae2;
+  --map-ward-4: #ebe6dc;
+  --map-province: #e2ded6;
+
+  --r-row: 14px;
+  --r-card: 16px;
+  --r-panel: 20px;
+  --r-sheet: 24px;
+  --r-pill: 999px;
+  --shadow: 0 12px 32px rgba(15, 13, 20, 0.1);
+  --shadow-lg: 0 24px 60px rgba(15, 13, 20, 0.14);
+
+  --font: var(--font-jakarta), "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --topbar-h: 69px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+img,
+svg {
+  display: block;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--accent-tint);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Lenis smooth scroll (landing only) */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

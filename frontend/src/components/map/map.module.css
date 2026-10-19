@@ -1,0 +1,125 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--map-land);
+  overflow: hidden;
+}
+.map {
+  position: absolute;
+  inset: 0;
+}
+.notice {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2;
+  max-width: 320px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  color: var(--muted);
+  box-shadow: var(--shadow);
+}
+
+/* HTML markers (numbered stop pins, stay) — Figma "Pin 1..6" and "Stay" */
+:global(.ct-pin) {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  background: var(--pin-color, var(--accent));
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--font);
+  box-shadow: 0 2px 6px rgba(15, 13, 20, 0.25);
+  cursor: pointer;
+  transition: transform 0.2s var(--ease-out);
+  animation: ct-pop 0.45s var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+:global(.ct-pin[data-hover="true"]) {
+  transform: scale(1.25);
+  z-index: 3;
+}
+:global(.ct-pin[data-dim="true"]) {
+  opacity: 0.55;
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+  border-width: 2px;
+}
+:global(.ct-stay) {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 3px solid #fff;
+  background: var(--ink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--font);
+  box-shadow: 0 2px 8px rgba(15, 13, 20, 0.3);
+  cursor: grab;
+}
+:global(.ct-stay:active) {
+  cursor: grabbing;
+}
+@keyframes ct-pop {
+  from {
+    transform: scale(0) translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Place card popup — Figma "Place card" */
+:global(.ct-popup .maplibregl-popup-content) {
+  padding: 16px;
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  font-family: var(--font);
+  min-width: 220px;
+}
+:global(.ct-popup .maplibregl-popup-tip) {
+  display: none;
+}
+:global(.ct-card-title) {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+:global(.ct-card-meta) {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+:global(.ct-card-est) {
+  margin-top: 6px;
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+:global(.ct-card-score) {
+  float: right;
+  margin-left: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+:global(.ct-card-hint) {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+:global(.maplibregl-ctrl-attrib) {
+  font-size: 10px;
+}

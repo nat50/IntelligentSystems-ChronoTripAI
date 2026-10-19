@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="12" height="56" viewBox="0 0 12 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="rail">
+<circle id="dot" cx="6" cy="10" r="6" fill="#D6336C"/>
+<rect id="line" x="5" y="16" width="2" height="40" fill="#E2E0E3"/>
+</g>
+</svg>

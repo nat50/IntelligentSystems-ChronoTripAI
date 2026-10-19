@@ -1,0 +1,53 @@
+# ChronoTrip AI: web (Next.js) + api (FastAPI, GA solver, ML) + PostGIS + OSRM
+# 1. sh scripts/prepare_osrm.sh      (once: builds the Vietnam routing graph in ./osrm)
+# 2. docker compose up --build       (first api start downloads LBSN2Vec++ and trains the models)
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: chronotrip
+      POSTGRES_USER: chronotrip
+      POSTGRES_PASSWORD: chronotrip
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chronotrip"]
+      interval: 5s
+      retries: 20
+
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v6.0.0
+    command: osrm-routed --algorithm mld --max-table-size 200 /data/vietnam-latest.osrm
+    volumes:
+      - ./osrm:/data:ro
+
+  api:
+    build: ./backend
+    environment:
+      CHRONOTRIP_DATABASE_URL: postgresql+psycopg://chronotrip:chronotrip@db:5432/chronotrip
+      CHRONOTRIP_DATA_DIR: /data
+      CHRONOTRIP_OSRM_URL: http://osrm:5000
+      CHRONOTRIP_ADMIN_TOKEN: ${CHRONOTRIP_ADMIN_TOKEN:-}
+      CHRONOTRIP_CORS_ORIGINS: '["http://localhost:3000"]'
+    volumes:
+      - chronotrip-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      osrm:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  web:
+    build: ./frontend
+    environment:
+      BACKEND_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  chronotrip-data:
