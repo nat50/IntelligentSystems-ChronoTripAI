@@ -29,4 +29,7 @@ async def optimize_route(req: OptimizeRequest, s: Annotated[Session, Depends(get
     if any(p.city != req.city for p in rows):
         raise HTTPException(422, "All places must be in the selected city")
     places = [by_id[pid] for pid in req.place_ids]
-    return await run_in_threadpool(optimize, req, places)
+    try:
+        return await run_in_threadpool(optimize, req, places)
+    except ValueError as exc:  # e.g. every selected place is closed on the trip days
+        raise HTTPException(422, str(exc)) from exc

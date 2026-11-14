@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import gzip
 import io
+import json
 import logging
 import zipfile
 from collections.abc import Callable, Iterator
@@ -24,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from . import hours
 from .categories import classify, fix_encoding
 from .geo import SEA_COUNTRIES, SUPPORTED_CITIES, WARDS, assign_city, haversine_km
 
@@ -32,6 +34,9 @@ log = logging.getLogger(__name__)
 POI_FILE = "raw_POIs.txt"
 CHECKIN_FILE = "raw_Checkins_anonymized.txt"
 SESSION_GAP_H = 8
+MAX_DWELL_MIN = 360  # nothing longer counts as one visit
+HOURS_TABLE = "hours.parquet"  # real opening hours matched to venues (optional)
+QUALITY_FILE = "quality.json"
 TRAIN_END = pd.Timestamp("2013-09-01")  # train: 04/2012 - 08/2013
 VAL_END = pd.Timestamp("2013-11-01")  # val: 09-10/2013, test: 11/2013 - 01/2014
 SPLITS = ("train", "val", "test")
@@ -166,7 +171,7 @@ def build_visits(checkins: pd.DataFrame, venues: pd.DataFrame) -> pd.DataFrame:
     dist = haversine_km(lat[v[a]], lon[v[a]], lat[v[a + 1]], lon[v[a + 1]])
     travel_min = dist / 20.0 * 60.0 + 3.0  # urban door-to-door estimate
     dwell = (t[a + 1] - t[a]) / 60.0 - travel_min
-    keep = (dwell >= 5) & (dwell <= 360) & (dist <= 30)
+    keep = (dwell >= 5) & (dist <= 30)  # the upper cut is per category, see trim_visits
     a = a[keep]
     local = df["local"].to_numpy()[a]
     return pd.DataFrame(
@@ -177,6 +182,31 @@ def build_visits(checkins: pd.DataFrame, venues: pd.DataFrame) -> pd.DataFrame:
             "split": df["split"].to_numpy()[a],
         }
     )
+
+
+def trim_visits(visits: pd.DataFrame, venues: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Drop dwell times that are too long to be one visit (Figma D1 quality issue).
+
+    The gap to the next check-in also contains every stop the user did not check
+    in at, so the right tail is contaminated. The cut is the 97.5th percentile of
+    the venue's category (categories with fewer than 200 visits: of all visits),
+    and never more than MAX_DWELL_MIN.
+    """
+    dwell = visits["dwell"].to_numpy()
+    label = venues["label"].to_numpy()[visits["venue_idx"].to_numpy()]
+    overall = float(np.quantile(dwell, 0.975)) if len(dwell) else MAX_DWELL_MIN
+    stats = pd.Series(dwell).groupby(label).agg(["size", lambda s: s.quantile(0.975)])
+    cut = pd.Series(np.where(stats["size"] >= 200, stats.iloc[:, 1], overall), index=stats.index).clip(upper=MAX_DWELL_MIN)
+    limit = pd.Series(label).map(cut).to_numpy(dtype=np.float64) if len(dwell) else np.zeros(0)
+    keep = dwell <= limit
+    quality = {
+        "raw": int(len(dwell)),
+        "over_max": int((dwell > MAX_DWELL_MIN).sum()),
+        "over_category_limit": int((~keep & (dwell <= MAX_DWELL_MIN)).sum()),
+        "kept": int(keep.sum()),
+        "max_dwell_min": MAX_DWELL_MIN,
+    }
+    return visits[keep].reset_index(drop=True), quality
 
 
 def enrich_venues(venues: pd.DataFrame, checkins: pd.DataFrame) -> pd.DataFrame:
@@ -238,7 +268,18 @@ def run(raw_dir: Path, out_dir: Path, status: Callable[[str], None] | None = Non
     visits = build_visits(checkins, venues)
     # M3 only needs dwell times at candidate places
     visits = visits[venues["group"].notna().to_numpy()[visits["venue_idx"].to_numpy()]].reset_index(drop=True)
+    visits, visit_quality = trim_visits(visits, venues)
     stats = country_stats(checkins, venues)
+    say("Matching opening hours")
+    opening = hours.prepare(raw_dir, venues)
+    (out_dir / HOURS_TABLE).unlink(missing_ok=True)  # never reuse the match of an older run
+    if opening is not None:
+        opening.to_parquet(out_dir / HOURS_TABLE, index=False)
+    quality = {
+        "visits": visit_quality,
+        "opening_hours": {"crawl_found": opening is not None, "matched": 0 if opening is None else int(len(opening))},
+    }
+    (out_dir / QUALITY_FILE).write_text(json.dumps(quality, indent=2))
 
     venues.to_parquet(out_dir / "venues.parquet", index=False)
     checkins.to_parquet(out_dir / "checkins.parquet", index=False)

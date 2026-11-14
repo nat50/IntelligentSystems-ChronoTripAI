@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.schema import CreateColumn
 
 from .config import get_settings
 
@@ -41,10 +42,27 @@ def get_session() -> Iterator[Session]:
         yield s
 
 
+def _add_missing_columns() -> None:
+    """There are no migrations: add the columns a newer build introduced to existing tables.
+
+    Only columns with a server default can be added this way, which is why the
+    newer `places` columns all declare one.
+    """
+    existing = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            have = {c["name"] for c in existing.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in have and column.server_default is not None:
+                    ddl = CreateColumn(column).compile(dialect=engine.dialect)
+                    conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN {ddl}'))
+
+
 def init_db() -> None:
     from . import orm  # noqa: F401  (register tables)
 
     Base.metadata.create_all(engine)
+    _add_missing_columns()
     if engine.dialect.name == "postgresql":
         # PostGIS geography column + GiST index for spatial queries
         with engine.begin() as conn:

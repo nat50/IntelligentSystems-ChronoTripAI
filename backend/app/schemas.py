@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Confidence = Literal["high", "medium", "low"]
+HoursSource = Literal["crawl", "estimated"]
 
 
 def parse_clock(v: str | int) -> int:
@@ -43,10 +44,30 @@ class PlaceOut(BaseModel):
     confidence: Confidence
     n_checkins: int
     estimated: bool = True  # every attribute is a model estimate (spec II.5)
+    # Added for the Figma screens T2 / D2. All have defaults, so older clients keep
+    # working. Field by field: docs/frontend-integration.md
+    duration_lo: int = 0  # typical visit length range (q25..q75 of M3), minutes
+    duration_hi: int = 0
+    hours_source: HoursSource = "estimated"  # "crawl": open_min / close_min are real opening hours
+    closed_days: list[int] = Field(default_factory=list)  # weekdays the place is closed, 0 = Monday
+    conf_m1: Confidence = "low"  # popularity (score)
+    conf_m2: Confidence = "low"  # best time (golden_start / golden_end)
+    conf_m3: Confidence = "low"  # visit length (duration)
+
+    @model_validator(mode="after")
+    def _range(self):
+        # rows loaded before the range existed carry 0
+        self.duration_lo = self.duration_lo or self.duration
+        self.duration_hi = self.duration_hi or self.duration
+        return self
 
 
 class PlaceDetail(PlaceOut):
     hour_profile: list[float]
+    n_users: int = 0
+    n_visits: int = 0  # visits with a measured length (input of M3)
+    one_time_share: float = 0.0  # share of users who checked in exactly once
+    visit_hist: list[int] = Field(default_factory=list)  # visits per 20-min bin, last bin = 240+
 
 
 class CityOut(BaseModel):
@@ -79,6 +100,7 @@ class OptimizeRequest(BaseModel):
     city: str
     place_ids: list[int] = Field(min_length=1, max_length=30)
     days: int = Field(1, ge=1, le=3)
+    start_date: date | None = None  # first trip day (T1); needed to honour closed weekdays
     day_start: int = Field(8 * 60, ge=0, le=24 * 60)
     day_end: int = Field(21 * 60 + 30, ge=0, le=24 * 60)
     stay: Point
@@ -153,6 +175,7 @@ class ItineraryOut(BaseModel):
     runtime_s: float
     travel_source: Literal["osrm", "estimate"]
     weights: dict[str, float]
+    warnings: list[str] = Field(default_factory=list)  # trip-level notes, e.g. a place closed on every trip day
 
 
 class CountryStatOut(BaseModel):

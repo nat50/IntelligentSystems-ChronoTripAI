@@ -47,9 +47,17 @@ def register_version(s: Session, version_dir: Path) -> orm.ModelVersion:
     version = meta["version"]
     attrs = pd.read_parquet(version_dir / "attributes.parquet")
     s.execute(delete(orm.Place).where(orm.Place.version == version))
+    # Versions trained before the range / per-model confidence columns existed
+    if "duration_lo" not in attrs:
+        attrs = attrs.assign(
+            duration_lo=attrs["duration"], duration_hi=attrs["duration"], hours_source="estimated", closed_days="[]",
+            conf_m1=attrs["confidence"], conf_m2=attrs["confidence"], conf_m3=attrs["confidence"],
+            n_visits=0, one_time_share=0.0, visit_hist="[]",
+        )
     records = attrs.assign(version=version).to_dict("records")
     for r in records:
-        r["hour_profile"] = json.loads(r["hour_profile"])
+        for col in ("hour_profile", "closed_days", "visit_hist"):
+            r[col] = json.loads(r[col])
     s.bulk_insert_mappings(orm.Place, records)
     mv = s.get(orm.ModelVersion, version) or orm.ModelVersion(version=version)
     mv.source = meta["source"]

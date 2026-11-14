@@ -7,12 +7,14 @@ Used by the tests and to bootstrap a working app before the real dataset
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 
-from .geo import CITIES, WARDS, haversine_km
+from .geo import CITIES, SUPPORTED_CITIES, WARDS, haversine_km
+from .hours import HOURS_FILE
 
 # name, hour peaks [(centre, spread)], mean dwell (min), weight
 CATALOG: list[tuple[str, list[tuple[float, float]], float, float]] = [
@@ -47,6 +49,32 @@ CATALOG: list[tuple[str, list[tuple[float, float]], float, float]] = [
     ("Bus Station", [(7, 2.0), (17, 2.0)], 20, 0.6),
     ("Hotel", [(14, 3.0)], 300, 0.5),
 ]
+# OSM-style tag value and opening hours of the categories that get crawled hours
+# in the sample (same file format as ml.hours.fetch writes).
+SAMPLE_HOURS: dict[str, tuple[str, str]] = {
+    "Vietnamese Restaurant": ("restaurant", "Mo-Su 10:00-22:00"),
+    "Café": ("cafe", "Mo-Su 07:00-22:00"),
+    "Coffee Shop": ("cafe", "Mo-Su 06:30-21:30"),
+    "Bubble Tea Shop": ("cafe", "Mo-Su 09:00-22:00"),
+    "Street Food Gathering": ("fast_food", "Mo-Su 16:00-23:00"),
+    "Seafood Restaurant": ("restaurant", "Mo-Su 16:00-23:00"),
+    "Museum": ("museum", "Tu-Su 08:00-11:30,13:30-17:00"),
+    "Art Gallery": ("gallery", "Tu-Su 09:00-18:00"),
+    "Buddhist Temple": ("place_of_worship", "Mo-Su 06:00-19:00"),
+    "Church": ("place_of_worship", "05:30-19:00"),
+    "Historic Site": ("attraction", "Mo-Su 07:30-17:00; PH off"),
+    "Park": ("park", "Mo-Su 05:00-22:00"),
+    "Market": ("marketplace", "Mo-Su 06:00-18:00"),
+    "Night Market": ("marketplace", "Mo-Su 18:00-23:30"),
+    "Shopping Mall": ("shop mall", "Mo-Su 09:30-22:00"),
+    "Bookstore": ("shop books", "Mo-Sa 08:00-21:30"),
+    "Movie Theater": ("cinema", "Mo-Su 09:00-23:30"),
+    "Theme Park": ("theme_park", "We-Mo 08:30-17:30"),
+    "Zoo": ("zoo", "Mo-Su 07:00-18:30"),
+    "Bar": ("bar", "Mo-Su 17:00-02:00"),
+    "Nightclub": ("nightclub", "Tu-Su 21:00-03:00"),
+}
+HOURS_SHARE = 0.45  # share of those places that the crawl knows
 OFFSETS = {"VN": 420, "TH": 420, "ID": 420, "KH": 420, "MY": 480, "SG": 480, "PH": 480}
 USER_SHARE = {
     "Ho Chi Minh City": 0.16, "Hanoi": 0.10, "Jakarta": 0.18, "Kuala Lumpur": 0.12, "Bangkok": 0.10,
@@ -74,6 +102,8 @@ def write_sample(out_dir: Path, users: int = 3000, seed: int = 42) -> None:
     cat_names = [c[0] for c in CATALOG]
     cat_w = np.array([c[3] for c in CATALOG])
     profiles = np.stack([_profile(c[1]) for c in CATALOG])
+    hours_rng = np.random.default_rng(seed + 1)  # separate stream: the check-ins stay as they were
+    crawl = []
 
     venues: dict[str, dict[str, np.ndarray]] = {}
     lines = []
@@ -93,6 +123,14 @@ def write_sample(out_dir: Path, users: int = 3000, seed: int = 42) -> None:
         venues[city] = dict(id=ids, lat=lat, lon=lon, cat=cat, pop=pop)
         for i in range(n):
             lines.append(f"{ids[i]}\t{lat[i]:.6f}\t{lon[i]:.6f}\t{cat_names[cat[i]]}\t{cc}")
+            known = SAMPLE_HOURS.get(cat_names[cat[i]])
+            if city in SUPPORTED_CITIES and known and hours_rng.random() < HOURS_SHARE:
+                jitter = hours_rng.normal(0, 0.0001, 2)  # about 10 m: OSM and Foursquare pins differ
+                crawl.append(
+                    {"lat": round(lat[i] + jitter[0], 6), "lon": round(lon[i] + jitter[1], 6),
+                     "kind": known[0], "opening_hours": known[1]}
+                )
+    (out_dir / HOURS_FILE).write_text(json.dumps(crawl, ensure_ascii=False), encoding="utf-8")
     # mojibake + junk rows like the raw file
     lines.append(f"{rng.bytes(12).hex()}\t10.776\t106.70\tCafÃ©\tVN")
     lines.append("broken line without fields")

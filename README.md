@@ -39,7 +39,9 @@ npm run dev          # http://localhost:3000 — /api is proxied to http://127.0
 
 Tests: `cd backend && ../.venv/Scripts/python -m pytest -q` (solver + API, uses the synthetic sample, no network).
 
-Other entry points (run these from `backend/`): `python -m ml.download` (dataset only), `python -m ml.pipeline --raw data/raw` (retrain).
+Other entry points (run these from `backend/`): `python -m ml.download` (dataset only), `python -m ml.hours --raw data/raw` (crawl real opening hours from OpenStreetMap, optional, before training), `python -m ml.pipeline --raw data/raw` (retrain).
+
+Model changes and the API contract for the frontend: [docs/model-changes.md](docs/model-changes.md), [docs/frontend-integration.md](docs/frontend-integration.md).
 The admin screen (`/admin`) can also download the dataset, train a new version and activate it.
 
 ### Configuration (`backend/.env` or environment, prefix `CHRONOTRIP_`)

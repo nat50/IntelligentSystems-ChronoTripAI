@@ -41,6 +41,73 @@ def test_cities_and_places(client):
     assert len(detail["hour_profile"]) == 24
 
 
+def test_place_attributes_from_the_models(client):
+    places = client.get("/api/places", params={"city": "Ho Chi Minh City", "limit": 400}).json()
+    levels = {"high", "medium", "low"}
+    for p in places:
+        assert 10 <= p["duration_lo"] <= p["duration"] <= p["duration_hi"]
+        assert {p["conf_m1"], p["conf_m2"], p["conf_m3"], p["confidence"]} <= levels
+        assert p["golden_end"] - p["golden_start"] == 120
+        assert all(0 <= d <= 6 for d in p["closed_days"])
+        # the best time lies inside the opening window (which may run past midnight)
+        fits = [p["open_min"] <= p["golden_start"] + shift and p["golden_end"] + shift <= p["close_min"] for shift in (0, 1440)]
+        assert any(fits) or p["close_min"] - p["open_min"] < 120, p
+    crawled = [p for p in places if p["hours_source"] == "crawl"]
+    assert crawled and len(crawled) < len(places)
+    assert all(p["confidence"] == "high" for p in crawled)
+    museum = next(p for p in crawled if p["label"] == "Museum")
+    assert (museum["open_min"], museum["close_min"], museum["closed_days"]) == (480, 1020, [0])
+    assert museum["golden_start"] < 12 * 60  # calm morning hours, not the busiest ones
+    detail = client.get(f"/api/places/{museum['id']}").json()
+    assert len(detail["visit_hist"]) == 13 and sum(detail["visit_hist"]) == detail["n_visits"]
+    assert 0 <= detail["one_time_share"] <= 1
+
+
+def test_version_metrics_for_the_models_screen(client):
+    metrics = client.get("/api/admin/overview").json()["versions"][0]["metrics"]
+    m3 = metrics["m3"]
+    assert m3["mae"] > 0 and m3["rmse"] >= m3["mae"] and 0 <= m3["within_15"] <= 1
+    curve = m3["learning_curve"]
+    assert len(curve["iteration"]) == len(curve["train"]) == len(curve["valid"]) > 1
+    assert m3["largest_errors"] and {"place", "error_min", "n_visits"} <= set(m3["largest_errors"][0])
+    for model in ("m1", "m2", "m3"):
+        assert set(metrics[model]["by_city"]) == {"Ho Chi Minh City", "Hanoi"}
+        assert set(metrics[model]["by_bucket"]) == {"0-9", "10-29", "30+"}
+    assert 0 <= metrics["m1"]["ndcg20"] <= 1
+    assert metrics["m2"]["hours_eval"]["n"] > 0
+    summary = metrics["summary"]
+    assert len(summary["visit_bin_edges"]) == 13
+    assert summary["data_quality"]["visits"]["kept"] > 0
+    assert summary["data_quality"]["opening_hours"]["matched"] > 0
+    assert set(summary["confidence"]) == {"m1", "m2", "m3", "window"}
+
+
+def test_closed_weekday_is_avoided(client):
+    places = client.get("/api/places", params={"city": "Ho Chi Minh City", "limit": 400}).json()
+    museum = next(p for p in places if p["label"] == "Museum" and p["closed_days"] == [0])
+    others = [p["id"] for p in places if not p["closed_days"]][:8]
+    body = {
+        "city": "Ho Chi Minh City",
+        "place_ids": [museum["id"], *others],
+        "days": 2,
+        "start_date": "2026-11-16",  # a Monday
+        "day_start": "08:00",
+        "day_end": "21:30",
+        "stay": {"lat": 10.8008, "lon": 106.742},
+    }
+    it = client.post("/api/itinerary/optimize", json=body).json()
+    assert museum["id"] not in [s["place"]["id"] for s in it["days"][0]["stops"]]
+    one_day = client.post("/api/itinerary/optimize", json=body | {"days": 1}).json()
+    assert museum["id"] in [p["id"] for p in one_day["unscheduled"]]
+    assert any("closed on every day" in w for w in one_day["warnings"])
+    only = client.post("/api/itinerary/optimize", json=body | {"days": 1, "place_ids": [museum["id"]]})
+    assert only.status_code == 422
+    booked = body | {"days": 1, "locks": [{"place_id": museum["id"], "day": 0}]}
+    day = client.post("/api/itinerary/optimize", json=booked).json()["days"][0]
+    assert museum["id"] in [s["place"]["id"] for s in day["stops"]]
+    assert any("usually closed" in w for w in day["warnings"])
+
+
 def test_suggest_includes_food(client):
     sug = client.get("/api/places/suggest", params={"city": "Hanoi", "limit": 8}).json()
     assert len(sug) == 8 and any(p["group"] == "food" for p in sug)

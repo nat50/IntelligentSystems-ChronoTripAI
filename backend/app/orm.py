@@ -42,6 +42,18 @@ class Place(Base):
     n_checkins: Mapped[int] = mapped_column(Integer)
     n_users: Mapped[int] = mapped_column(Integer)
     hour_profile: Mapped[list] = mapped_column(JSON)
+    # Added with the Figma-aligned models (docs/model-changes.md). Every column has a
+    # server default, so db.init_db can add them to a table created by an older build.
+    duration_lo: Mapped[int] = mapped_column(Integer, server_default="0")  # q25 of the visit length
+    duration_hi: Mapped[int] = mapped_column(Integer, server_default="0")  # q75
+    hours_source: Mapped[str] = mapped_column(String(16), server_default="estimated")  # crawl | estimated
+    closed_days: Mapped[list] = mapped_column(JSON, server_default="[]")  # weekdays, 0 = Monday
+    conf_m1: Mapped[str] = mapped_column(String(8), server_default="low")
+    conf_m2: Mapped[str] = mapped_column(String(8), server_default="low")
+    conf_m3: Mapped[str] = mapped_column(String(8), server_default="low")
+    n_visits: Mapped[int] = mapped_column(Integer, server_default="0")
+    one_time_share: Mapped[float] = mapped_column(Float, server_default="0")
+    visit_hist: Mapped[list] = mapped_column(JSON, server_default="[]")
 
 
 class ModelVersion(Base):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 
 from solver import GAConfig, Problem, Weights, describe, solve
@@ -11,6 +13,8 @@ from .. import orm
 from ..config import get_settings
 from ..schemas import DayOut, ItineraryOut, OptimizeRequest, PlaceOut, StopOut
 from .travel import travel_matrix
+
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
 def _window_for_day(open_min: int, close_min: int, day_start: int, day_end: int) -> tuple[int, int]:
@@ -73,23 +77,77 @@ def build_problem(req: OptimizeRequest, places: list[orm.Place]) -> tuple[Proble
     return problem, source
 
 
+def closed_trip_days(req: OptimizeRequest, place: orm.Place) -> set[int]:
+    """Trip days (0-based) on which the place is closed. Needs the trip's start date."""
+    if req.start_date is None or not place.closed_days:
+        return set()
+    return {d for d in range(req.days) if (req.start_date + timedelta(days=d)).weekday() in place.closed_days}
+
+
+def _name(place: orm.Place) -> str:
+    return f"{place.label} · {place.ward}"
+
+
 def optimize(req: OptimizeRequest, places: list[orm.Place]) -> ItineraryOut:
+    locks = {lock.place_id: lock for lock in req.locks}
+    closed = {p.id: closed_trip_days(req, p) for p in places}
+    trip_warnings: list[str] = []
+
+    # A place that is closed on every trip day cannot be scheduled, unless the user booked it.
+    never_open = [p for p in places if len(closed[p.id]) == req.days and p.id not in locks]
+    for p in never_open:
+        trip_warnings.append(f"{_name(p)} is closed on every day of this trip")
+    dropped = {p.id for p in never_open}
+    places = [p for p in places if p.id not in dropped]
+    if not places:
+        raise ValueError("Every selected place is closed on the days of this trip")
+
     problem, source = build_problem(req, places)
     index = {p.id: i for i, p in enumerate(places)}
     seeds = None
     if req.seed_plan:
-        days = [[index[pid] for pid in day] for day in req.seed_plan[: req.days]]
+        days = [[index[pid] for pid in day if pid in index] for day in req.seed_plan[: req.days]]
         days += [[] for _ in range(req.days - len(days))]
         used = {i for d in days for i in d}
         seeds = [(days, [i for i in range(len(places)) if i not in used])]
     cfg = GAConfig(time_limit_s=get_settings().solver_time_limit_s, seed=7)
     result = solve(problem, cfg, seeds=seeds)
-    if not req.locks and req.first_day_start is None:
+
+    # Closed weekdays (crawled opening hours). The solver has one window per place
+    # for the whole trip, so a stop that lands on a closed day is pinned to an open
+    # day and the plan is solved once more from there. solver/ stays untouched.
+    def on_closed_day(days: list[list[int]]) -> list[tuple[int, int]]:
+        return [(d, i) for d, seq in enumerate(days) for i in seq
+                if d in closed[places[i].id] and places[i].id not in locks]
+
+    moved: set[int] = set()
+    if on_closed_day(result.days):
+        plan = [list(seq) for seq in result.days]
+        for d, i in on_closed_day(plan):
+            plan[d].remove(i)
+            target = min((t for t in range(req.days) if t not in closed[places[i].id]), key=lambda t: len(plan[t]))
+            plan[target].append(i)
+            moved.add(i)
+        for d, seq in enumerate(plan):  # keep every day-sensitive stop on a day it is open
+            for i in seq:
+                if closed[places[i].id] and places[i].id not in locks:
+                    problem.lock_day[i] = d
+        result = solve(problem, cfg, seeds=[(plan, list(result.pool))])
+        for d, i in on_closed_day(result.days):  # only a place that was unscheduled before can still land here
+            result.days[d].remove(i)
+            result.pool.append(i)
+            trip_warnings.append(f"{_name(places[i])} is closed on day {d + 1} and did not fit on another day")
+    for i in sorted(moved):
+        if not any(i in seq for seq in result.days):
+            continue
+        days_closed = ", ".join(WEEKDAYS[w] for w in places[i].closed_days)
+        trip_warnings.append(f"{_name(places[i])} is closed on {days_closed}; it was planned on a day it is open")
+
+    if not req.locks and req.first_day_start is None and not any(closed.values()):
         # Days are interchangeable (same hours, same stay): fill day 1 first
         # instead of leaving it empty while later days hold the plan.
         result.days.sort(key=lambda d: len(d) == 0)
     schedule = describe(problem, result.days)
-    locks = {lock.place_id: lock for lock in req.locks}
 
     days_out = []
     for day in schedule:
@@ -99,6 +157,8 @@ def optimize(req: OptimizeRequest, places: list[orm.Place]) -> ItineraryOut:
             close = problem.close[s.index]
             late = max(0, round(s.depart - close))
             lock = locks.get(place.id)
+            if day.day in closed[place.id]:  # only possible for a place the user locked to this day
+                warnings.append(f"{_name(place)} is usually closed on this day")
             if late > 0:
                 warnings.append(f"{place.label} · {place.ward} may close about {late} min before you leave")
             if lock and lock.start is not None and s.arrive > lock.start + 1:
@@ -141,7 +201,8 @@ def optimize(req: OptimizeRequest, places: list[orm.Place]) -> ItineraryOut:
     w = problem.weights
     return ItineraryOut(
         days=days_out,
-        unscheduled=[PlaceOut.model_validate(places[i]) for i in result.pool],
+        unscheduled=[PlaceOut.model_validate(p) for p in [places[i] for i in result.pool] + never_open],
+        warnings=trip_warnings,
         fitness=round(result.fitness, 2),
         generations=result.generations,
         runtime_s=round(result.runtime_s, 2),

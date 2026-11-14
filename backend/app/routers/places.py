@@ -66,12 +66,15 @@ def suggest(s: SessionDep, city: str, limit: Annotated[int, Query(ge=1, le=30)] 
     """Automatic suggestions: the highest S_i, kept varied — at least two food places
     for meals, at most two of a kind and one nightlife spot."""
     v = require_version(s)
-    ranked = s.scalars(
-        select(orm.Place)
-        .where(orm.Place.version == v, orm.Place.city == city, orm.Place.confidence == "high")
-        .order_by(orm.Place.score.desc(), orm.Place.n_checkins.desc())
-        .limit(400)
-    ).all()
+    ranked: list[orm.Place] = []
+    for wanted in (["high"], ["medium", "low"]):  # less certain places only when the sure ones run out
+        if len(ranked) < limit:
+            ranked += s.scalars(
+                select(orm.Place)
+                .where(orm.Place.version == v, orm.Place.city == city, orm.Place.confidence.in_(wanted))
+                .order_by(orm.Place.score.desc(), orm.Place.n_checkins.desc())
+                .limit(400)
+            ).all()
     caps = {"nightlife": 1}
     picked: list[orm.Place] = []
     per_label: dict[str, int] = {}
