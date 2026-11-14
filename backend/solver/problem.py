@@ -20,6 +20,31 @@ LOW_CONFIDENCE_TW_FACTOR = 0.25  # low-confidence opening windows are soft
 
 
 @dataclass(frozen=True)
+class Objective:
+    """Objective weights tuned on the optimizer screen (Figma D4), summing to 1.
+
+    The defaults reproduce the spec weights. Each factor scales one part of F(X)
+    relative to the defaults: popularity scales w1, golden scales the golden-hour
+    bonus (Beta_i - 1), travel scales w2 and w3.
+    """
+
+    popularity: float = 0.6
+    golden: float = 0.3
+    travel: float = 0.1
+
+    def factors(self) -> tuple[float, float, float]:
+        total = self.popularity + self.golden + self.travel
+        if total <= 0:
+            return 1.0, 1.0, 1.0
+        d = Objective()
+        return (
+            self.popularity / total / d.popularity,
+            self.golden / total / d.golden,
+            self.travel / total / d.travel,
+        )
+
+
+@dataclass(frozen=True)
 class Weights:
     """w_1..w_6 of the fitness function F(X)."""
 
@@ -29,9 +54,12 @@ class Weights:
     time_window: float = 0.30  # w4  * P_tw (squared minutes)
     meal: float = 60.0  # w5  * P_meal (missed meals)
     fatigue: float = 30.0  # w6  * P_fatigue (violations)
+    golden: float = GOLDEN_BONUS - 1.0  # Beta_i - 1: extra score share for a start in the golden window
 
     @classmethod
-    def from_preferences(cls, pace: float = 0.5, travel: float = 0.5, strictness: float = 0.5) -> "Weights":
+    def from_preferences(
+        cls, pace: float = 0.5, travel: float = 0.5, strictness: float = 0.5, objective: "Objective | None" = None
+    ) -> "Weights":
         """Map the three preference sliders (each 0..1) to the weight vector w.
 
         pace:        0 = relaxed (fewer places, strong fatigue rule) .. 1 = packed
@@ -39,13 +67,15 @@ class Weights:
         strictness:  0 = flexible hours/meals .. 1 = respect them strictly
         """
         pace, travel, strictness = (min(1.0, max(0.0, float(v))) for v in (pace, travel, strictness))
+        o = (objective or Objective()).factors()
         return cls(
-            score=0.6 + 0.8 * pace,
-            travel=0.15 + 0.65 * travel,
-            wait=0.05 + 0.25 * travel,
+            score=(0.6 + 0.8 * pace) * o[0],
+            travel=(0.15 + 0.65 * travel) * o[2],
+            wait=(0.05 + 0.25 * travel) * o[2],
             time_window=0.02 + 0.56 * strictness,
             meal=20.0 + 80.0 * strictness,
             fatigue=60.0 - 45.0 * pace,
+            golden=(GOLDEN_BONUS - 1.0) * o[1],
         )
 
     def as_array(self) -> np.ndarray:

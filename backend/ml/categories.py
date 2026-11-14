@@ -78,6 +78,30 @@ def classify(category: str) -> tuple[str | None, int, str]:
     return None, 2, cat
 
 
+# Interest chips of Figma T1 / T2 (Food, Culture, Nature, Nightlife, Shopping), by display label.
+# Follows the Figma examples: a market is "Food", a night market "Nightlife", a theme park "Nature".
+INTERESTS = ("food", "culture", "nature", "nightlife", "shopping")
+INTEREST_OF_LABEL: dict[str, str] = {
+    "Nightclub": "nightlife", "Night market": "nightlife", "Bar": "nightlife", "Arcade": "nightlife",
+    "Theme park": "nature", "Zoo": "nature", "Sports venue": "nature", "Trail": "nature", "Waterfront": "nature",
+    "Park": "nature",
+    "Theater": "culture", "Museum": "culture", "Temple": "culture", "Landmark": "culture",
+    "Market": "food", "Café": "food", "Vietnamese kitchen": "food", "Street food": "food", "Restaurant": "food",
+    "Mall": "shopping",
+}
+_INTEREST_OF_GROUP = {
+    "sightseeing": "culture", "entertainment": "culture", "food": "food", "nightlife": "nightlife", "shopping": "shopping",
+}
+
+
+def interest_of(label: str, group: str) -> str:
+    return INTEREST_OF_LABEL.get(label) or _INTEREST_OF_GROUP.get(group, "culture")
+
+
+def labels_of_interest(interest: str) -> list[str]:
+    return [label for label, i in INTEREST_OF_LABEL.items() if i == interest]
+
+
 # Category-level priors (minutes since midnight) used when a place has too few
 # check-ins and as the M2 / M3 fallback.
 GROUP_PRIORS: dict[str, dict[str, float]] = {

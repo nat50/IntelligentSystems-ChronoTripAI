@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ml.categories import labels_of_interest
 from ml.geo import CITIES, DEFAULT_STAY, SUPPORTED_CITIES
 
 from .. import orm
 from ..db import get_session
-from ..schemas import CityOut, PlaceDetail, PlaceOut
+from ..schemas import CityOut, Interest, PlaceDetail, PlaceOut
+from ..services.quality import place_quality, search_filter
 from ..services.versions import active_version
 
 router = APIRouter(prefix="/api", tags=["places"])
@@ -46,10 +48,21 @@ def places(
     city: str,
     bbox: Annotated[str | None, Query(description="minLon,minLat,maxLon,maxLat")] = None,
     group: str | None = None,
+    interest: Annotated[list[Interest] | None, Query(description="Figma interest chips; repeat for several")] = None,
+    q: Annotated[str | None, Query(max_length=80, description="search text: name, area, category or id")] = None,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
 ):
     v = require_version(s)
-    q = select(orm.Place).where(orm.Place.version == v, orm.Place.city == city)
+    query = select(orm.Place).where(orm.Place.version == v, orm.Place.city == city)
+    if interest:
+        labels = [label for i in interest for label in labels_of_interest(i)]
+        query = query.where(orm.Place.label.in_(labels))
+    if q and q.strip():
+        query = query.where(search_filter(q))
+    return _places(s, query, bbox, group, limit)
+
+
+def _places(s: Session, q, bbox: str | None, group: str | None, limit: int):
     if bbox:
         try:
             x0, y0, x1, y1 = (float(x) for x in bbox.split(","))
@@ -62,20 +75,24 @@ def places(
 
 
 @router.get("/places/suggest", response_model=list[PlaceOut])
-def suggest(s: SessionDep, city: str, limit: Annotated[int, Query(ge=1, le=30)] = 8):
+def suggest(
+    s: SessionDep,
+    city: str,
+    limit: Annotated[int, Query(ge=1, le=30)] = 8,
+    interest: Annotated[list[Interest] | None, Query(description="T1 interests; food is always kept for meals")] = None,
+):
     """Automatic suggestions: the highest S_i, kept varied — at least two food places
     for meals, at most two of a kind and one nightlife spot."""
     v = require_version(s)
     ranked: list[orm.Place] = []
     for wanted in (["high"], ["medium", "low"]):  # less certain places only when the sure ones run out
         if len(ranked) < limit:
-            ranked += s.scalars(
-                select(orm.Place)
-                .where(orm.Place.version == v, orm.Place.city == city, orm.Place.confidence.in_(wanted))
-                .order_by(orm.Place.score.desc(), orm.Place.n_checkins.desc())
-                .limit(400)
-            ).all()
-    caps = {"nightlife": 1}
+            q = select(orm.Place).where(orm.Place.version == v, orm.Place.city == city, orm.Place.confidence.in_(wanted))
+            if interest:
+                labels = [label for i in {*interest, "food"} for label in labels_of_interest(i)]
+                q = q.where(orm.Place.label.in_(labels))
+            ranked += s.scalars(q.order_by(orm.Place.score.desc(), orm.Place.n_checkins.desc()).limit(400)).all()
+    caps = {"nightlife": 0 if interest and "nightlife" not in interest else 1}
     picked: list[orm.Place] = []
     per_label: dict[str, int] = {}
     per_group: dict[str, int] = {}
@@ -110,4 +127,8 @@ def place(s: SessionDep, place_id: int):
     p = s.scalar(select(orm.Place).where(orm.Place.id == place_id, orm.Place.version == v))
     if p is None:
         raise HTTPException(404, "Place not found")
-    return p
+    out = PlaceDetail.model_validate(p)
+    mv = s.get(orm.ModelVersion, v)
+    out.model_versions = {m: (mv.components or {}).get(m, v) for m in ("m1", "m2", "m3")} if mv else {}
+    out.quality = place_quality(p)
+    return out

@@ -58,7 +58,7 @@ def describe(problem: Problem, days: list[list[int]]) -> list[DaySchedule]:
         simulate_day(
             np.asarray(seq, dtype=np.int64), p.start_depot[d], p.end_depot[d], p.day_start[d], p.day_end[d],
             p.travel, p.score, p.duration, p.open_, p.close, p.golden_start, p.golden_end, p.effort,
-            p.is_food, p.soft_tw, p.lock_time, comp, stops,
+            p.is_food, p.soft_tw, p.lock_time, p.weights.golden, comp, stops,
         )
         rows = [
             ScheduledStop(

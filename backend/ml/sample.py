@@ -81,7 +81,7 @@ USER_SHARE = {
     "Manila": 0.07, "Singapore": 0.06, "Bandung": 0.04, "Surabaya": 0.04, "Cebu": 0.03,
     "Chiang Mai": 0.03, "Denpasar": 0.03, "Da Nang": 0.04,
 }
-VENUES_PER_CITY = {"Ho Chi Minh City": 520, "Hanoi": 320}
+VENUES_PER_CITY = {"Ho Chi Minh City": 520, "Hanoi": 320, "Da Nang": 160}
 START, END = datetime(2012, 4, 3), datetime(2014, 1, 31)
 
 

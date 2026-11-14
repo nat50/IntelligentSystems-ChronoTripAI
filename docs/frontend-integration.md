@@ -1,6 +1,6 @@
 # Nối frontend với model M1–M3 mới
 
-Tài liệu này mô tả những gì backend trả thêm sau khi làm lại M1–M3 theo Figma "ChronoTrip AI – Product Design", và frontend cần sửa gì để dùng. Lý do và chi tiết thuật toán nằm ở [model-changes.md](model-changes.md).
+Tài liệu này mô tả những gì backend trả thêm sau khi làm lại M1–M3 theo Figma "ChronoTrip AI – Product Design", và frontend cần sửa gì để dùng. Lý do và chi tiết thuật toán nằm ở [model-changes.md](model-changes.md). Bảng đối chiếu **từng màn Figma** (T1–T4, D1–D4) với API, cùng các endpoint mới (chuyến đi đã lưu, job tối ưu, must-visit, Data console), nằm ở [figma-api.md](figma-api.md).
 
 **Frontend hiện tại vẫn chạy được mà không cần sửa gì.** Không trường nào bị xoá hay đổi tên, mọi trường mới đều có giá trị mặc định. Tuy vậy có **hai trường cũ đổi nghĩa** (mục 1), nên một vài nhãn trên giao diện cũ sẽ nói sai cho tới khi được sửa.
 
@@ -110,7 +110,7 @@ Khoá cũ giữ nguyên (`loglik*`, `kappa_venue`, `width`). Thêm `kappa_ward` 
 
 ### `by_city`, `by_bucket` (có trong cả m1, m2, m3)
 
-- `by_city`: `{ "Ho Chi Minh City": {...}, "Hanoi": {...} }`, cùng bộ metric nhưng chỉ tính cho thành phố đó.
+- `by_city`: `{ "Ho Chi Minh City": {...}, "Hanoi": {...}, "Da Nang": {...} }`, cùng bộ metric nhưng chỉ tính cho thành phố đó.
 - `by_bucket`: `{ "0-9": {...}, "10-29": {...}, "30+": {...} }`, tách theo số check-in của địa điểm (chỉ thành phố đang phục vụ). Dùng để thấy model tệ đến đâu với địa điểm ít dữ liệu (D1: "Vietnam has only 48,357 check-ins").
 
 ### `metrics.summary` (D1 · Data, D2)
@@ -185,6 +185,8 @@ export interface ModelVersion {
 `src/lib/trip-store.tsx` đang kiểm tra hình dạng `Place` khi đọc từ localStorage. Hàm kiểm tra đó không nên *bắt buộc* các trường mới, vì chuyến đi đã lưu từ trước sẽ không có chúng.
 
 ## 6. Danh sách việc phía frontend
+
+Danh sách này chỉ gồm việc để hiển thị các trường model mới trên những màn đang có. Việc cho các màn Figma mới (T4 Saved trips, hộp "Building your itinerary", "No plan fits", Data console D1–D4) nằm ở [figma-api.md §5](figma-api.md#5-việc-phía-frontend-cho-các-màn-mới).
 
 1. `src/lib/types.ts`: thêm các kiểu ở mục 5.
 2. `src/components/map/MapView.tsx` (popup, dòng ~49): `"best"` → "Best time"; giờ mở cửa theo `hours_source`; thêm "Closed on …" từ `closed_days`; thời lượng dạng khoảng.

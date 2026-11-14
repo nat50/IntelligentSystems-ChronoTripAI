@@ -56,7 +56,7 @@ Hai quyết định đã chốt với nhóm:
 - `python -m ml.hours --raw data/raw`: tải mọi địa điểm OSM có thẻ `opening_hours` trong bán kính 30 km quanh TP.HCM và Hà Nội qua Overpass API (thử lần lượt 3 máy chủ, mỗi máy tối đa 3 vòng), rồi lưu vào `data/raw/osm_hours.json`. Pipeline chỉ đọc file này, nên vẫn chạy offline; không có file thì mọi giờ mở cửa đều là ước lượng như trước.
 - `parse_opening_hours` đọc phần thông dụng của cú pháp OSM: danh sách ngày, khoảng giờ, `off`, `24/7`, giờ qua nửa đêm, nghỉ trưa (lấy từ giờ mở sớm nhất tới giờ đóng muộn nhất), tên ngày dạng 3 chữ, `PH`, và nhiều quy tắc ngăn bằng dấu phẩy. Khi các ngày có giờ khác nhau thì lấy khung giờ xuất hiện nhiều nhất. Chuỗi ngoài phạm vi này (tháng, sunrise, "by appointment"…) bị bỏ qua.
 - `match`: mỗi địa điểm được ghép với địa điểm OSM **cùng nhóm** gần nhất trong vòng 100 m (theo quy tắc ở bước 3 màn D1).
-- Lần crawl thật ngày 14/11/2026: lấy về 4.030 địa điểm OSM; 2.725 địa điểm có giờ đọc được và thuộc nhóm ứng viên. Phần bị loại chủ yếu là ATM, cửa hàng tiện lợi, ngân hàng, khách sạn… (không phải địa điểm tham quan), và 80 chuỗi giờ ghi tự do.
+- Lần crawl thật ngày 14/11/2026 (TP.HCM, Hà Nội, Đà Nẵng): lấy về 4.961 địa điểm OSM; 3.405 địa điểm có giờ đọc được và thuộc nhóm ứng viên. Trong đó TP.HCM và Hà Nội chiếm 2.725, còn lại là Đà Nẵng. Phần bị loại chủ yếu là ATM, cửa hàng tiện lợi, ngân hàng, khách sạn… (không phải địa điểm tham quan), và 80 chuỗi giờ ghi tự do.
 
 ### `backend/ml/pipeline.py`
 - `batch_infer(venues, checkins, visits, m1, m2, m3, opening)` trả về `(bảng thuộc tính, thông tin)`. Thứ tự tính: hồ sơ giờ (M2) → thời lượng (M3, tại giờ đông nhất) → khung giờ ước lượng (giờ đóng = giờ đến cuối + một lượt, tối đa 2 giờ) → thay bằng giờ thật nếu có → best time → độ tin cậy → điểm (M1).
@@ -125,4 +125,4 @@ Sau khi train, cần điền vào đây: các metric ở trên tính cho Việt 
 - M2 ở nhóm 0–9 check-in (dữ liệu mẫu): log-likelihood −2.659, **kém** baseline theo loại (−2.631). `kappa_venue` được chọn chung cho mọi địa điểm, nên có thể cần một `kappa` riêng cho địa điểm ít dữ liệu. Mẫu ở nhóm này mới có 197 check-in, cần xem lại trên dữ liệu thật.
 - `QUIET_FLOOR` (0,4) và các ngưỡng tin cậy (0,8 / 0,5, 20 / 5 người dùng, 20 / 5 lượt) được chọn bằng tay trên dữ liệu mẫu.
 - Giờ mở cửa OSM không ghi ngày lễ (`PH`) và chỉ giữ một khung giờ mỗi ngày. Ngày có giờ khác thường (ví dụ Chủ Nhật đóng sớm) dùng khung giờ phổ biến nhất trong tuần.
-- Chưa làm (ngoài phạm vi lần này): version riêng cho từng model như D3 (hiện một version gồm cả ba model); dùng edit log từ T4 làm nhãn cho M3; Đà Nẵng; màn D4.
+- Version riêng cho từng model (D3), Đà Nẵng và màn D4 đã làm ở đợt sau, xem [figma-api.md](figma-api.md). Vẫn chưa làm: dùng edit log từ T4 làm nhãn khi train M3 (hiện mới chỉ thu thập).

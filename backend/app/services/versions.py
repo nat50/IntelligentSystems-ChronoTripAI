@@ -11,6 +11,8 @@ import pandas as pd
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from ml.pipeline import MODELS
+
 from .. import orm
 from ..config import get_settings
 
@@ -64,6 +66,9 @@ def register_version(s: Session, version_dir: Path) -> orm.ModelVersion:
     mv.created_at = datetime.fromisoformat(meta["created_at"])
     mv.metrics = meta["metrics"]
     mv.places = len(records)
+    mv.components = meta.get("components") or {m: version for m in MODELS}
+    mv.trained = meta.get("trained", list(MODELS))
+    mv.settings = meta.get("settings", {})
     s.add(mv)
     if meta["source"] == "dataset" and (version_dir / "country_stats.parquet").exists():
         stats = pd.read_parquet(version_dir / "country_stats.parquet")
@@ -75,6 +80,15 @@ def register_version(s: Session, version_dir: Path) -> orm.ModelVersion:
     s.commit()
     log.info("registered %s with %d places", version, len(records))
     return mv
+
+
+def components(mv: orm.ModelVersion) -> dict[str, str]:
+    """Version each model of `mv` was trained in (rows registered before per-model versions: itself)."""
+    return {m: (mv.components or {}).get(m, mv.version) for m in MODELS}
+
+
+def trained(mv: orm.ModelVersion) -> list[str]:
+    return list(mv.trained) if mv.components else list(MODELS)
 
 
 def activate(s: Session, version: str) -> orm.ModelVersion:

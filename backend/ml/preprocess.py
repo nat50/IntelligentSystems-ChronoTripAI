@@ -276,6 +276,8 @@ def run(raw_dir: Path, out_dir: Path, status: Callable[[str], None] | None = Non
     if opening is not None:
         opening.to_parquet(out_dir / HOURS_TABLE, index=False)
     quality = {
+        "split_counts": {k: int(v) for k, v in checkins["split"].value_counts().to_dict().items()},
+        "split_dates": {"train_end": str(TRAIN_END.date()), "val_end": str(VAL_END.date())},
         "visits": visit_quality,
         "opening_hours": {"crawl_found": opening is not None, "matched": 0 if opening is None else int(len(opening))},
     }

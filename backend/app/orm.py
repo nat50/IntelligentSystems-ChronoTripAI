@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -65,6 +65,11 @@ class ModelVersion(Base):
     metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     places: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Per-model versions (Figma D3): which version each model was trained in, which
+    # models this version trained itself, and the settings they were trained with.
+    components: Mapped[dict] = mapped_column(JSON, server_default="{}")  # {"m1": "v1", "m2": "v3", "m3": "v3"}
+    trained: Mapped[list] = mapped_column(JSON, server_default="[]")  # ["m3"]
+    settings: Mapped[dict] = mapped_column(JSON, server_default="{}")  # {"m3": {...}}
 
 
 class TrainingJob(Base):
@@ -78,6 +83,67 @@ class TrainingJob(Base):
     version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    kind: Mapped[str] = mapped_column(String(16), server_default="full")  # full | model | compose
+    target: Mapped[str] = mapped_column(String(8), server_default="")  # model key for kind model / compose
+
+
+class Trip(Base):
+    """A saved trip (Figma T4). There are no accounts: whoever holds the edit token owns it."""
+
+    __tablename__ = "trips"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64))  # sha256 of the edit token
+    title: Mapped[str] = mapped_column(String(120))
+    city: Mapped[str] = mapped_column(String(64))
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    days: Mapped[int] = mapped_column(Integer)
+    request: Mapped[dict] = mapped_column(JSON)  # OptimizeRequest
+    venues: Mapped[dict] = mapped_column(JSON)  # {place_id: venue} of the request, to survive new model versions
+    itinerary: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # ItineraryOut snapshot
+    share_slug: Mapped[str | None] = mapped_column(String(48), unique=True, nullable=True)
+    share_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    improve_estimates: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
+
+
+class EditLog(Base):
+    """An anonymous itinerary edit shared with consent (T4 -> D1). No trip or user id is kept."""
+
+    __tablename__ = "edit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    city: Mapped[str] = mapped_column(String(64))
+    venue: Mapped[str] = mapped_column(String(64), default="")
+    label: Mapped[str] = mapped_column(String(64), default="")
+    kind: Mapped[str] = mapped_column(String(16))
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)  # new start or new visit length (min)
+    predicted_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)  # M3 estimate at that time
+    model_version: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class OptimizerConfig(Base):
+    """Optimizer settings applied to the planner from the D4 screen; the newest row is active."""
+
+    __tablename__ = "optimizer_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    settings: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Benchmark(Base):
+    __tablename__ = "benchmarks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), default="running")  # running | done | failed
+    settings: Mapped[dict] = mapped_column(JSON)
+    active: Mapped[dict] = mapped_column(JSON)
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
 class CountryStat(Base):

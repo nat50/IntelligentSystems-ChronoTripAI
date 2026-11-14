@@ -11,12 +11,16 @@ optionally, to a booked start time.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
 
 from .problem import Problem
 from .schedule import C_END, N_COMPONENTS, simulate_day, weighted
+
+
+ProgressFn = Callable[[int, int, list[list[int]]], bool | None]
 
 
 @dataclass
@@ -33,6 +37,7 @@ class GAConfig:
     stagnation_limit: int = 80
     time_limit_s: float = 6.0
     seed: int | None = 7
+    local_search: bool = True  # 2-opt / relocate / swap on the best individuals
 
 
 @dataclass
@@ -87,6 +92,7 @@ class Evaluator:
             p.is_food,
             p.soft_tw,
             p.lock_time,
+            p.weights.golden,
             self.comp,
             self.stops,
         )
@@ -101,7 +107,7 @@ class Evaluator:
         simulate_day(
             np.asarray(seq, dtype=np.int64), p.start_depot[d], p.end_depot[d], p.day_start[d], p.day_end[d],
             p.travel, p.score, p.duration, p.open_, p.close, p.golden_start, p.golden_end, p.effort,
-            p.is_food, p.soft_tw, p.lock_time, self.comp, self.stops,
+            p.is_food, p.soft_tw, p.lock_time, p.weights.golden, self.comp, self.stops,
         )
         return float(self.comp[C_END])
 
@@ -388,7 +394,11 @@ class MemeticGA:
         return self._make(days, pool)
 
     # ---- main loop --------------------------------------------------------- #
-    def run(self, seeds: list[tuple[list[list[int]], list[int]]] | None = None) -> SolveResult:
+    def run(
+        self, seeds: list[tuple[list[list[int]], list[int]]] | None = None, on_generation: ProgressFn | None = None
+    ) -> SolveResult:
+        """Evolve the population. `on_generation(gen, max_generations, best_days)` is called after
+        every generation; returning False stops the search early (the best plan so far is kept)."""
         cfg, p = self.cfg, self.p
         t_start = time.perf_counter()
         n_km = int(round(cfg.population * cfg.kmeans_share))
@@ -412,7 +422,7 @@ class MemeticGA:
                     child = self.mutate(child)
                 nxt.append(child)
             pop = nxt
-            if gen % cfg.local_search_every == 0:
+            if cfg.local_search and gen % cfg.local_search_every == 0:
                 pop.sort(key=lambda x: x.fitness, reverse=True)
                 n_ls = max(1, int(round(cfg.population * cfg.local_search_share)))
                 pop[:n_ls] = [self.local_search(ind) for ind in pop[:n_ls]]
@@ -422,13 +432,16 @@ class MemeticGA:
             else:
                 stagnant += 1
             history.append(best.fitness)
+            if on_generation is not None and on_generation(gen, cfg.max_generations, split(best.genes, p.n, p.m)[0]) is False:
+                break
             if stagnant >= cfg.stagnation_limit or time.perf_counter() - t_start > cfg.time_limit_s:
                 break
 
-        best = self.local_search(best, max_rounds=6)
+        if cfg.local_search:
+            best = self.local_search(best, max_rounds=6)
         days, pool = split(best.genes, p.n, p.m)
         return SolveResult(days, pool, best.fitness, gen, time.perf_counter() - t_start, history)
 
 
-def solve(problem: Problem, config: GAConfig | None = None, seeds=None) -> SolveResult:
-    return MemeticGA(problem, config).run(seeds)
+def solve(problem: Problem, config: GAConfig | None = None, seeds=None, on_generation: ProgressFn | None = None) -> SolveResult:
+    return MemeticGA(problem, config).run(seeds, on_generation)

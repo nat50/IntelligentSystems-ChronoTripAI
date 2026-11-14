@@ -10,7 +10,7 @@ from sqlalchemy import update
 from . import orm
 from .config import get_settings
 from .db import SessionLocal, init_db
-from .routers import admin, itinerary, places
+from .routers import admin, itinerary, places, trips
 from .services.versions import seed_country_stats, sync_from_disk
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -41,6 +41,7 @@ app.add_middleware(
 )
 app.include_router(places.router)
 app.include_router(itinerary.router)
+app.include_router(trips.router)
 app.include_router(admin.router)
 
 

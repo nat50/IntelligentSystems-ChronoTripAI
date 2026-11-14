@@ -33,6 +33,31 @@ PEAK_GROUPS = ("food", "nightlife")  # best time = busiest hours (meal time, nig
 BEST_MINUTES = 120
 QUIET_FLOOR = 0.4  # a quiet window still needs this share of the peak-hour level
 DAY_BREAK_H = 4  # 04:00, where one business day ends and the next begins
+WINDOW_MASS = 0.9  # share of check-ins inside the estimated opening window
+
+# Settings each model accepts from the data console (Figma D3 "Edit settings"):
+# name -> (default, min, max). Anything else is rejected.
+SETTINGS: dict[str, dict[str, tuple[float, float, float]]] = {
+    "m1": {"learning_rate": (0.05, 0.005, 0.5), "num_leaves": (63, 7, 255), "n_cutoffs": (5, 1, 8)},
+    "m2": {"quiet_floor": (QUIET_FLOOR, 0.0, 0.9), "window_mass": (WINDOW_MASS, 0.5, 0.99)},
+    "m3": {"learning_rate": (0.05, 0.005, 0.5), "num_leaves": (31, 7, 255)},
+}
+INTEGER_SETTINGS = {"num_leaves", "n_cutoffs"}
+
+
+def check_settings(model: str, given: dict) -> dict:
+    """Defaults filled in, unknown keys and out-of-range values rejected (ValueError)."""
+    spec = SETTINGS[model]
+    unknown = sorted(set(given) - set(spec))
+    if unknown:
+        raise ValueError(f"Unknown {model} settings: {unknown}. Allowed: {sorted(spec)}")
+    out = {}
+    for name, (default, lo, hi) in spec.items():
+        value = float(given.get(name, default))
+        if not lo <= value <= hi:
+            raise ValueError(f"{model}.{name} must be between {lo} and {hi}")
+        out[name] = int(round(value)) if name in INTEGER_SETTINGS else value
+    return out
 STABLE_HIGH, STABLE_MEDIUM = 0.8, 0.5  # share of posterior draws that agree with the estimate
 
 
@@ -118,6 +143,9 @@ class M1Popularity:
     booster: lgb.Booster | None = None
     labels: list[str] | None = None
     cities: list[str] | None = None
+    learning_rate: float = 0.05
+    num_leaves: int = 63
+    n_cutoffs: int = 5  # rolling origins, two months apart, the last one at TRAIN_END
 
     FEATURES = [
         "label_code", "group_code", "city_code", "lat", "lon",
@@ -126,7 +154,6 @@ class M1Popularity:
         # do not depend on the venue's own history: they carry the cold-start venues
         "nbr_users_500m", "nbr_users_2km", "area_users",
     ]
-    N_CUTOFFS = 5  # rolling origins, two months apart, the last one at TRAIN_END
     HORIZON = pd.DateOffset(months=2)
     RECENT = pd.Timedelta(days=91)
 
@@ -184,7 +211,7 @@ class M1Popularity:
         # Rolling origins: history before T -> distinct users in the two months after T.
         # Every target window ends at or before VAL_END, so the test period stays unseen.
         Xs, ys, holds = [], [], []
-        for k in reversed(range(self.N_CUTOFFS)):
+        for k in reversed(range(self.n_cutoffs)):
             t = TRAIN_END - pd.DateOffset(months=2 * k)
             past, future = local < t, (local >= t) & (local < t + self.HORIZON)
             if not past.any() or not future.any():
@@ -199,7 +226,7 @@ class M1Popularity:
         X, y, hold = pd.concat(Xs, ignore_index=True), pd.concat(ys, ignore_index=True), np.concatenate(holds)
 
         params = dict(
-            objective="regression", learning_rate=0.05, num_leaves=63,
+            objective="regression", learning_rate=self.learning_rate, num_leaves=self.num_leaves,
             min_data_in_leaf=max(5, len(X) // 2500), feature_fraction=0.9, bagging_fraction=0.8,
             bagging_freq=1, seed=seed, verbose=-1,
         )
@@ -261,6 +288,9 @@ class M1Popularity:
     def load(cls, d: Path) -> "M1Popularity":
         meta = json.loads((d / "m1.json").read_text())
         return cls(lgb.Booster(model_file=str(d / "m1.txt")), meta["labels"], meta["cities"])
+
+    def save_settings(self) -> dict:
+        return {"learning_rate": self.learning_rate, "num_leaves": self.num_leaves, "n_cutoffs": self.n_cutoffs}
 
 
 # --------------------------------------------------------------------------- #
@@ -375,6 +405,8 @@ class M2HourProfile:
     city_p: dict | None = None
     kappa_ward: float = 20.0
     ward_p: dict | None = None  # "label|city|ward" -> profile (the regional prior)
+    quiet_floor: float = QUIET_FLOOR  # used when the best time is picked from the profile
+    window_mass: float = WINDOW_MASS  # used when the opening window is estimated from it
 
     @staticmethod
     def _hist(checkins: pd.DataFrame, venues: pd.DataFrame, mask: pd.Series) -> np.ndarray:
@@ -494,8 +526,8 @@ class M2HourProfile:
         rng = np.random.default_rng(seed)
 
         def estimate(p):
-            start, run = hour_windows(p)
-            return best_starts(p, groups, open_min, close_min, duration), start, start + run
+            start, run = hour_windows(p, self.window_mass)
+            return best_starts(p, groups, open_min, close_min, duration, floor=self.quiet_floor), start, start + run
 
         mean = circular_smooth(alpha, self.width)
         ref = estimate(mean / mean.sum(1, keepdims=True))
@@ -518,7 +550,10 @@ class M2HourProfile:
             d / "m2.npz",
             global_p=self.global_p,
             **table("cat", self.cat_p), **table("city", self.city_p), **table("ward", self.ward_p),
-            params=np.array([self.kappa_venue, self.kappa_city, self.kappa_cat, self.width, self.kappa_ward]),
+            params=np.array([
+                self.kappa_venue, self.kappa_city, self.kappa_cat, self.width, self.kappa_ward,
+                self.quiet_floor, self.window_mass,
+            ]),
         )
 
     @classmethod
@@ -531,7 +566,12 @@ class M2HourProfile:
         m.city_p = dict(zip(z["city_keys"].tolist(), z["city_vals"]))
         m.ward_p = dict(zip(z["ward_keys"].tolist(), z["ward_vals"])) if "ward_keys" in z else {}
         m.kappa_ward = params[4] if len(params) > 4 else m.kappa_ward
+        if len(params) > 6:
+            m.quiet_floor, m.window_mass = params[5], params[6]
         return m
+
+    def save_settings(self) -> dict:
+        return {"quiet_floor": float(self.quiet_floor), "window_mass": float(self.window_mass)}
 
 
 # --------------------------------------------------------------------------- #
@@ -546,6 +586,8 @@ class M3VisitLength:
     category_median: dict | None = None
     lower: lgb.Booster | None = None  # q25
     upper: lgb.Booster | None = None  # q75
+    learning_rate: float = 0.05
+    num_leaves: int = 31
 
     FEATURES = [
         "label_code", "group_code", "city_code", "hour", "weekend", "log_users",
@@ -641,7 +683,7 @@ class M3VisitLength:
         boosters, curve = {}, {}
         for q in self.QUANTILES:
             params = dict(
-                objective="quantile", alpha=q, learning_rate=0.05, num_leaves=31,
+                objective="quantile", alpha=q, learning_rate=self.learning_rate, num_leaves=self.num_leaves,
                 min_data_in_leaf=max(5, len(X_tr) // 1000), seed=seed, verbose=-1,
             )
             history: dict = {}
@@ -755,6 +797,9 @@ class M3VisitLength:
             booster("m3.txt"), meta["labels"], meta["cities"], meta["alpha"], meta["category_median"],
             booster("m3_q25.txt"), booster("m3_q75.txt"),
         )
+
+    def save_settings(self) -> dict:
+        return {"learning_rate": self.learning_rate, "num_leaves": self.num_leaves}
 
 
 def fallback_duration(group: str | None) -> float:

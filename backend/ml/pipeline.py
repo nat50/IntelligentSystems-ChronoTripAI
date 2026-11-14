@@ -26,7 +26,7 @@ from . import preprocess
 from .geo import SUPPORTED_CITIES
 from .models import (
     BEST_MINUTES, STABLE_HIGH, STABLE_MEDIUM, M1Popularity, M2HourProfile, M3VisitLength,
-    best_starts, circular_smooth, fallback_duration, hour_windows, level,
+    best_starts, check_settings, circular_smooth, fallback_duration, hour_windows, level,
 )
 
 log = logging.getLogger(__name__)
@@ -41,6 +41,11 @@ ATTRIBUTE_COLUMNS = [
     "golden_start", "golden_end", "confidence", "conf_m1", "conf_m2", "conf_m3",
     "n_checkins", "n_users", "n_visits", "one_time_share", "hour_profile", "visit_hist",
 ]
+
+
+def processed_dir(work_dir: Path, source: str) -> Path:
+    """Where preprocessing writes its Parquet tables for a data source."""
+    return work_dir / ("processed" if source == "dataset" else "processed_sample")
 
 
 def next_version(model_dir: Path) -> str:
@@ -83,7 +88,7 @@ def batch_infer(
     alpha = m2.alpha(rows, m2._hist(checkins, venues, everything)[idx])
     profile = circular_smooth(alpha, m2.width)
     profile /= profile.sum(1, keepdims=True)
-    start_h, run_h = hour_windows(profile)
+    start_h, run_h = hour_windows(profile, m2.window_mass)
 
     # M3: visit length for an arrival in the busiest hour
     q = m3.predict_venues(venues, visits, idx, profile.argmax(1))
@@ -120,7 +125,7 @@ def batch_infer(
     rows["hours_source"] = np.where(crawled, "crawl", "estimated")
 
     # Best time to visit (Figma T2): calm open hours; busiest hours for food and nightlife
-    best = best_starts(profile, groups, open_min, close_min, duration)
+    best = best_starts(profile, groups, open_min, close_min, duration, floor=m2.quiet_floor)
     rows["golden_start"] = (best * 60).astype(int)
     rows["golden_end"] = rows["golden_start"] + BEST_MINUTES
 
@@ -173,36 +178,111 @@ def load_candidates(processed: Path) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
     return venues, checkins, visits
 
 
+MODEL_CLASSES = {"m1": M1Popularity, "m2": M2HourProfile, "m3": M3VisitLength}
+MODEL_FILES = {
+    "m1": ("m1.txt", "m1.json"),
+    "m2": ("m2.npz",),
+    "m3": ("m3.txt", "m3_q25.txt", "m3_q75.txt", "m3.json"),
+}
+
+
+def read_meta(version_dir: Path) -> dict:
+    meta = json.loads((version_dir / "meta.json").read_text())
+    version = meta["version"]
+    # versions written before per-model versions trained all three models themselves
+    meta.setdefault("components", {m: version for m in MODELS})
+    meta.setdefault("trained", list(MODELS))
+    meta.setdefault("settings", {})
+    return meta
+
+
+def _copy_model(model: str, src: Path, out: Path) -> None:
+    for name in MODEL_FILES[model]:
+        if (src / name).exists():
+            shutil.copy2(src / name, out / name)
+
+
 def train_all(
-    processed: Path, model_dir: Path, version: str | None = None, source: str = "dataset", status: StatusFn | None = None
+    processed: Path, model_dir: Path, version: str | None = None, source: str = "dataset", status: StatusFn | None = None,
+    models: tuple[str, ...] = MODELS, base: Path | None = None, settings: dict | None = None,
 ) -> dict:
+    """Train `models` (all three by default) and write a complete version.
+
+    Models that are not trained are copied from the `base` version directory, so
+    a version always holds three models and its own attribute table. `settings`
+    maps a model key to its hyperparameters (ml.models.SETTINGS).
+    """
     say = status or (lambda m, s, i=None: log.info("%s: %s %s", m, s, i or ""))
+    settings = {m: check_settings(m, (settings or {}).get(m, {})) for m in MODELS}
+    if set(models) != set(MODELS) and base is None:
+        raise ValueError("Training only some models needs a base version for the others")
     version = version or next_version(model_dir)
     out = model_dir / version
     out.mkdir(parents=True, exist_ok=True)
     venues, checkins, visits = load_candidates(processed)
     say("pipeline", "loaded", {"venues": len(venues), "checkins": len(checkins), "visits": len(visits)})
-    metrics: dict[str, dict] = {}
     t0 = time.perf_counter()
+    base_meta = read_meta(base) if base is not None else None
+    metrics: dict[str, dict] = {}
+    loaded: dict = {}
+    for m in MODELS:
+        if m in models:
+            say(m, "training", None)
+            model = MODEL_CLASSES[m](**settings[m])
+            data = visits if m == "m3" else checkins
+            metrics[m] = model.fit(venues, data)
+            model.save(out)
+            say(m, "trained", metrics[m])
+        else:
+            _copy_model(m, base, out)
+            model = MODEL_CLASSES[m].load(out)
+            metrics[m] = base_meta["metrics"].get(m, {})
+        loaded[m] = model
+    components = {m: version if m in models else base_meta["components"][m] for m in MODELS}
+    run_settings = {m: loaded[m].save_settings() for m in MODELS}
+    return _infer_and_write(
+        processed, out, version, source, loaded, metrics, components, list(models), run_settings, t0, say,
+        (venues, checkins, visits),
+    )
 
-    say("m1", "training", None)
-    m1 = M1Popularity()
-    metrics["m1"] = m1.fit(venues, checkins)
-    m1.save(out)
-    say("m1", "trained", metrics["m1"])
 
-    say("m2", "training", None)
-    m2 = M2HourProfile()
-    metrics["m2"] = m2.fit(venues, checkins)
-    m2.save(out)
-    say("m2", "trained", metrics["m2"])
+def compose(
+    processed: Path, model_dir: Path, components: dict[str, str], version: str | None = None,
+    status: StatusFn | None = None,
+) -> dict:
+    """A new version from models trained in other versions (Figma D3 "Activate" / "Roll back").
 
-    say("m3", "training", None)
-    m3 = M3VisitLength()
-    metrics["m3"] = m3.fit(venues, visits)
-    m3.save(out)
-    say("m3", "trained", metrics["m3"])
+    `components` maps each model to the version directory it is taken from. Only
+    batch inference runs; no model is retrained.
+    """
+    say = status or (lambda m, s, i=None: log.info("%s: %s %s", m, s, i or ""))
+    version = version or next_version(model_dir)
+    out = model_dir / version
+    out.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
+    venues, checkins, visits = load_candidates(processed)
+    loaded, metrics, origins, run_settings, source = {}, {}, {}, {}, "dataset"
+    for m in MODELS:
+        src = model_dir / components[m]
+        src_meta = read_meta(src)
+        source = src_meta["source"]
+        _copy_model(m, src, out)
+        loaded[m] = MODEL_CLASSES[m].load(out)
+        metrics[m] = src_meta["metrics"].get(m, {})
+        origins[m] = src_meta["components"][m]  # the version that actually trained it
+        run_settings[m] = loaded[m].save_settings()
+        say(m, "trained", None)
+    return _infer_and_write(
+        processed, out, version, source, loaded, metrics, origins, [], run_settings, t0, say, (venues, checkins, visits)
+    )
 
+
+def _infer_and_write(
+    processed: Path, out: Path, version: str, source: str, loaded: dict, metrics: dict, components: dict,
+    trained: list[str], run_settings: dict, t0: float, say: StatusFn, data: tuple,
+) -> dict:
+    venues, checkins, visits = data
+    m1, m2, m3 = loaded["m1"], loaded["m2"], loaded["m3"]
     say("pipeline", "inferring", None)
     hours_file = processed / preprocess.HOURS_TABLE
     opening = pd.read_parquet(hours_file) if hours_file.exists() else None
@@ -228,6 +308,9 @@ def train_all(
         "metrics": _clean(metrics),
         "places": int(len(attrs)),
         "places_by_city": attrs["city"].value_counts().to_dict(),
+        "components": components,
+        "trained": trained,
+        "settings": run_settings,
     }
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     say("pipeline", "done", meta)
@@ -250,7 +333,7 @@ def run(
     raw_dir: Path, work_dir: Path, model_dir: Path, source: str = "dataset", status: StatusFn | None = None,
     version: str | None = None,
 ) -> dict:
-    processed = work_dir / ("processed" if source == "dataset" else "processed_sample")
+    processed = processed_dir(work_dir, source)
     say = status or (lambda m, s, i=None: log.info("%s: %s %s", m, s, i or ""))
     preprocess.run(raw_dir, processed, status=lambda msg: say("pipeline", "preprocessing", {"message": msg}))
     return train_all(processed, model_dir, version=version, source=source, status=status)

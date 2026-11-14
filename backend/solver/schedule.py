@@ -13,7 +13,6 @@ import numpy as np
 from ._jit import njit
 from .problem import (
     DINNER_WINDOW,
-    GOLDEN_BONUS,
     HIGH_EFFORT,
     LUNCH_WINDOW,
     MEAL_MINUTES,
@@ -45,12 +44,14 @@ def simulate_day(
     is_food,
     soft_tw,
     lock_time,
+    golden_bonus,
     out_comp,
     out_stops,
 ):
     """Simulate one day.
 
     seq        int64[k]   POI indices in visiting order
+    golden_bonus float    Beta_i - 1 for a start inside the golden window (spec: 0.25)
     out_comp   float64[7] score, travel, wait, P_tw, P_meal, P_fatigue, return time
     out_stops  float64[k+1, 7] per stop: arrive, start, depart, wait, travel_in,
                golden(0/1), meal_break_before(min). Row k describes the return
@@ -145,7 +146,7 @@ def simulate_day(
             out_comp[C_TW] += soft_tw[i] * over * over
 
         golden = golden_start[i] <= start and start <= golden_end[i]
-        beta = 1.25 if golden else 1.0
+        beta = 1.0 + golden_bonus if golden else 1.0
         out_comp[C_SCORE] += score[i] * beta
 
         if is_food[i] == 1:
@@ -191,4 +192,4 @@ def weighted(comp, w):
 # Keep python-level constants and kernel literals in sync
 assert _MEAL_W0[0] == 690.0 and _MEAL_W1[0] == 810.0
 assert _MEAL_W0[1] == 1080.0 and _MEAL_W1[1] == 1230.0
-assert MEAL_MINUTES == 60 and HIGH_EFFORT == 4 and GOLDEN_BONUS == 1.25
+assert MEAL_MINUTES == 60 and HIGH_EFFORT == 4

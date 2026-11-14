@@ -34,7 +34,7 @@ CITIES: list[tuple[str, str, float, float]] = [
     ("Phnom Penh", "KH", 11.5564, 104.9282),
 ]
 
-SUPPORTED_CITIES = ("Ho Chi Minh City", "Hanoi")  # prototype scope (spec II.3)
+SUPPORTED_CITIES = ("Ho Chi Minh City", "Hanoi", "Da Nang")  # prototype scope (spec II.3, Figma T1)
 
 # Approximate ward centroids used only for labels: (city, ward, lat, lon)
 WARDS: list[tuple[str, str, float, float]] = [
@@ -72,11 +72,24 @@ WARDS: list[tuple[str, str, float, float]] = [
     ("Hanoi", "Ngoc Thuy", 21.0450, 105.8700),
     ("Hanoi", "Truc Bach", 21.0450, 105.8400),
     ("Hanoi", "Kim Ma", 21.0310, 105.8150),
+    ("Da Nang", "Hai Chau", 16.0678, 108.2208),
+    ("Da Nang", "Thach Thang", 16.0763, 108.2216),
+    ("Da Nang", "Phuoc Ninh", 16.0597, 108.2190),
+    ("Da Nang", "Hoa Cuong", 16.0383, 108.2135),
+    ("Da Nang", "An Hai", 16.0700, 108.2320),
+    ("Da Nang", "Phuoc My", 16.0640, 108.2460),
+    ("Da Nang", "My An", 16.0505, 108.2430),
+    ("Da Nang", "Man Thai", 16.0820, 108.2480),
+    ("Da Nang", "Son Tra", 16.1100, 108.2700),
+    ("Da Nang", "Ngu Hanh Son", 16.0030, 108.2630),
+    ("Da Nang", "Thanh Khe", 16.0650, 108.1880),
+    ("Da Nang", "Hoa Khanh", 16.0750, 108.1500),
 ]
 
 DEFAULT_STAY = {
     "Ho Chi Minh City": (10.8008, 106.7420, "An Phu"),
     "Hanoi": (21.0310, 105.8500, "Hoan Kiem"),
+    "Da Nang": (16.0545, 108.2450, "My An"),
 }
 
 
