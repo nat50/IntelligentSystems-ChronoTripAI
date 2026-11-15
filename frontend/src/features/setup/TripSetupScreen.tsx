@@ -237,7 +237,6 @@ export function TripSetupScreen() {
 
       {stayOpen && city && (
         <StayDialog
-          center={{ lat: city.lat, lon: city.lon }}
           stay={state.stay ?? { ...city.stay }}
           onClose={() => setStayOpen(false)}
           onSave={(stay) => {
@@ -251,12 +250,10 @@ export function TripSetupScreen() {
 }
 
 function StayDialog({
-  center,
   stay,
   onClose,
   onSave,
 }: {
-  center: { lat: number; lon: number };
   stay: Point;
   onClose: () => void;
   onSave: (p: Point) => void;
@@ -266,7 +263,8 @@ function StayDialog({
     <Modal title="Where do you stay?" onClose={onClose}>
       <p className={s.sub}>Drag the H marker to your hotel, homestay or station. Every day starts and ends here.</p>
       <div className={s.stayMap}>
-        <MapView center={center} stay={point} onStayChange={(p) => setPoint({ ...p, label: point.label })} />
+        {/* centre on the saved stay (not the city centre) so the H marker is always in view */}
+        <MapView center={stay} stay={point} onStayChange={(p) => setPoint({ ...p, label: point.label })} />
       </div>
       <Field label="Name">
         <input className={inputClass} value={point.label} onChange={(e) => setPoint({ ...point, label: e.target.value })} />

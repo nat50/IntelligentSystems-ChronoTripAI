@@ -19,3 +19,5 @@ Thumbs.db
 
 # OSRM routing graph (scripts/prepare_osrm.sh)
 osrm/
+
+.env
