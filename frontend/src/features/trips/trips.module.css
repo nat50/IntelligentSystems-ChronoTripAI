@@ -1,0 +1,286 @@
+/* Figma T4 · Saved trips (83:450) */
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 40px;
+}
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.h1 {
+  font-weight: 700;
+  font-size: 32px;
+  letter-spacing: -0.5px;
+}
+.h2 {
+  font-weight: 700;
+  font-size: 24px;
+}
+.h3 {
+  font-weight: 700;
+  font-size: 17px;
+}
+.sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bad-bg);
+  color: #a50e0e;
+  font-size: 13px;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px;
+  border-radius: var(--r-card);
+  background: #fff;
+  color: var(--muted);
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: #fff;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+  box-shadow: 0 6px 20px rgba(15, 13, 20, 0.06);
+}
+.cardOn {
+  border: 2px solid var(--accent);
+}
+.mini {
+  width: 100%;
+  height: 140px;
+  background: var(--map-land);
+}
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 18px 20px;
+}
+.cardTitle {
+  margin-top: 4px;
+  font-weight: 700;
+  font-size: 18px;
+}
+.cardBody > button {
+  margin-top: 8px;
+}
+.stale {
+  font-size: 12px;
+  color: var(--golden-ink);
+}
+.overview {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: #fff;
+}
+.table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table th {
+  padding: 12px;
+  background: var(--bg);
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+}
+.table th:first-child {
+  border-radius: 10px 0 0 10px;
+}
+.table th:last-child {
+  border-radius: 0 10px 10px 0;
+}
+.table td {
+  padding: 16px 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* share and export panel */
+.side {
+  flex: none;
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 32px 24px;
+  background: #fff;
+  border-left: 1px solid var(--line);
+}
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-row);
+  background: var(--bg);
+}
+.boxBlue {
+  background: var(--admin-tint);
+}
+.boxRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.boxRow > span,
+.exportRow > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.boxRow strong,
+.exportRow strong {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+.link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #8a868c;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+.link span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.link button {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-weight: 500;
+}
+.exports {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.label {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+}
+.exportRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+}
+.download {
+  padding: 11px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-weight: 600;
+  font-size: 14px;
+}
+.download:hover {
+  background: var(--bg);
+}
+
+/* print view (portalled into body, hidden on screen) */
+.print {
+  font-family: var(--font);
+  color: #000;
+}
+.print h1 {
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+.printDay {
+  break-after: page;
+}
+.printDay:last-of-type {
+  break-after: auto;
+}
+.printDay h2 {
+  font-size: 18px;
+  margin: 12px 0 4px;
+}
+.printDay table {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.printDay td {
+  padding: 8px 6px;
+  border-bottom: 1px solid #ddd;
+}
+.printNote {
+  margin-top: 24px;
+  font-size: 11px;
+}
+
+@media (max-width: 1000px) {
+  .body {
+    flex-direction: column;
+  }
+  .side {
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (max-width: 560px) {
+  .main {
+    padding: 24px 16px;
+  }
+  .side {
+    padding: 24px 16px;
+  }
+  .table th,
+  .table td {
+    padding: 10px 6px;
+  }
+}
