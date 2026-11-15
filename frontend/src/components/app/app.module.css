@@ -16,7 +16,7 @@
   justify-self: end;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 24px;
   font-weight: 500;
   font-size: 13px;
   color: var(--muted);
@@ -60,11 +60,44 @@
 .placeRow[data-hover="true"] {
   border-color: var(--accent-soft);
 }
+.placeRowActive,
+.placeRowActive[data-hover="true"] {
+  border: 2px solid var(--accent);
+  background: var(--accent-tint);
+  padding: 11px 13px;
+}
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+}
+.nameLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mustTag {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+}
 .check {
   flex: none;
   width: 20px;
   height: 20px;
-  border-radius: var(--r-pill);
+  padding: 0;
+  border-radius: 6px;
   border: 1.5px solid var(--line);
   background: #fff;
   display: grid;
@@ -112,17 +145,22 @@
   color: var(--accent);
 }
 
-/* Stop — Figma 5:149 */
+/* Stop — Figma T3: handle · time · dot · name / meta · lock · remove */
 .stop {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: flex-start;
   width: 100%;
-  min-height: 56px;
   position: relative;
   border-radius: 12px;
-  padding: 0 8px 0 0;
+  padding: 10px 8px;
   background: #fff;
+}
+.stopEditable:hover {
+  background: var(--bg);
+}
+.stopMoved {
+  background: var(--bg);
 }
 .stopDragging {
   box-shadow: var(--shadow);
@@ -132,54 +170,27 @@
   flex: none;
   width: 48px;
   font-weight: 600;
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 15px;
+  line-height: 19px;
   font-variant-numeric: tabular-nums;
 }
-.rail {
+.dot {
   flex: none;
-  position: relative;
-  width: 12px;
-  align-self: stretch;
-}
-.rail::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
   border-radius: 50%;
   background: var(--day-color, var(--accent));
-}
-.rail::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 16px;
-  bottom: 0;
-  width: 2px;
-  background: var(--line);
-}
-.railLast::after {
-  display: none;
 }
 .body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 14px;
-}
-.titleRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
+  gap: 3px;
 }
 .title {
-  font-weight: 600;
+  font-weight: 500;
   font-size: 15px;
   line-height: 19px;
   white-space: nowrap;
@@ -196,10 +207,6 @@
   color: var(--muted);
 }
 .golden {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 500;
   color: var(--golden);
 }
 .warn {
@@ -207,33 +214,28 @@
   font-weight: 500;
 }
 .iconButton {
+  flex: none;
+  align-self: center;
   border: 0;
   background: transparent;
-  padding: 2px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: inline-grid;
   place-items: center;
-  opacity: 0;
-  transition:
-    opacity 0.2s,
-    background-color 0.2s;
-}
-.stop:hover .iconButton,
-.iconButton:focus-visible {
-  opacity: 0.5;
-}
-.stop .iconButton:hover,
-.iconOn,
-.stop:hover .iconOn {
-  opacity: 1;
+  color: var(--muted);
+  transition: background-color 0.2s, color 0.2s;
 }
 .iconButton:hover {
-  background: var(--bg);
+  background: #fff;
+  color: var(--ink);
+}
+.iconOn {
+  color: var(--ink);
 }
 .handle {
   flex: none;
   align-self: center;
-  margin-top: -14px;
   width: 20px;
   height: 28px;
   border: 0;
@@ -242,39 +244,21 @@
   cursor: grab;
   border-radius: 6px;
   touch-action: none;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.stop:hover .handle,
-.handle:focus-visible {
-  opacity: 1;
 }
 .handle:active {
   cursor: grabbing;
 }
 
-/* meal / travel line between stops */
+/* travel / meal line between stops */
 .between {
-  display: flex;
-  gap: 16px;
+  padding: 2px 0 6px 106px;
   font-size: 12px;
   color: var(--muted);
-  margin: -6px 0 8px;
 }
-.betweenSpacer {
-  width: 48px;
-  flex: none;
-}
-.betweenRail {
-  width: 12px;
-  flex: none;
-  display: flex;
-  justify-content: center;
-}
-.betweenRail::before {
-  content: "";
-  width: 2px;
-  background: var(--line);
+.ride {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .mealChip {
   display: inline-flex;
@@ -286,10 +270,84 @@
   font-weight: 500;
 }
 
+/* top bar brand + account (mock sign-in) */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.consoleBadge {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--admin-tint);
+  color: var(--admin);
+  font-weight: 600;
+  font-size: 12px;
+}
+.topLink {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+.account {
+  position: relative;
+}
+.accountMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 30;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+.accountName {
+  font-weight: 600;
+  color: var(--ink);
+}
+.accountEmail {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.accountItem {
+  border: 0;
+  background: none;
+  padding: 6px 0;
+  text-align: left;
+  color: var(--accent);
+  font-weight: 500;
+}
+.signIn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.signInNote {
+  font-size: 13px;
+  color: var(--muted);
+}
+.signInActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 720px) {
   .topbar {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
     padding: 0 16px;
+  }
+  .consoleBadge {
+    display: none;
   }
   .topbar > :nth-child(2) {
     justify-self: end;

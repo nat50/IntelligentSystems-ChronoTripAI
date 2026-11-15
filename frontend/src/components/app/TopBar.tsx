@@ -1,19 +1,24 @@
 import type { ReactNode } from "react";
-import { Logo, Segmented } from "@/components/ui";
+import { Logo, Segmented, type NavItem } from "@/components/ui";
 import s from "./app.module.css";
 
 export function TopBar({
   items,
   active,
   right,
+  badge,
 }: {
-  items: { href: string; label: string; disabled?: boolean }[];
+  items: NavItem[];
   active: string;
   right?: ReactNode;
+  badge?: ReactNode;
 }) {
   return (
     <header className={s.topbar}>
-      <Logo />
+      <span className={s.brand}>
+        <Logo />
+        {badge}
+      </span>
       <Segmented items={items} active={active} />
       <div className={s.topRight}>{right}</div>
     </header>

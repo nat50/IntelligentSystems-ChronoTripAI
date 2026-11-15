@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from "react";
-import type { Confidence, ModelState } from "@/lib/types";
+import type { Confidence } from "@/lib/types";
 import s from "./ui.module.css";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -17,8 +17,10 @@ export function Logo({ href = "/" }: { href?: string }) {
   );
 }
 
+type Variant = "primary" | "outline" | "ghost" | "admin";
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "outline" | "ghost";
+  variant?: Variant;
   block?: boolean;
   loading?: boolean;
 };
@@ -44,7 +46,7 @@ export function ButtonLink({
   children,
 }: {
   href: string;
-  variant?: "primary" | "outline" | "ghost";
+  variant?: Variant;
   className?: string;
   children: ReactNode;
 }) {
@@ -55,26 +57,36 @@ export function ButtonLink({
   );
 }
 
+/** step: "1" shows "1 Trip setup"; done shows "✓ Trip setup" (Figma planner steps) */
+export interface NavItem {
+  href: string;
+  label: string;
+  disabled?: boolean;
+  step?: string;
+  done?: boolean;
+}
+
 export function Segmented({
   items,
   active,
 }: {
-  items: { href: string; label: string; disabled?: boolean }[];
+  items: NavItem[];
   active: string;
 }) {
   return (
     <nav className={s.segmented} aria-label="Sections">
-      {items.map((it) => (
-        it.disabled ? (
+      {items.map((it) => {
+        const label = it.done && it.href !== active ? `✓ ${it.label}` : it.step ? `${it.step} ${it.label}` : it.label;
+        return it.disabled ? (
           <span key={it.href} aria-disabled="true" className={cx(s.segment, s.segmentDisabled)}>
-            {it.label}
+            {label}
           </span>
         ) : (
           <Link key={it.href} href={it.href} aria-current={it.href === active ? "page" : undefined} className={cx(s.segment, it.href === active && s.segmentActive)}>
-            {it.label}
+            {label}
           </Link>
-        )
-      ))}
+        );
+      })}
     </nav>
   );
 }
@@ -148,31 +160,79 @@ export function Slider({
   );
 }
 
-const PILL: Record<ModelState | "active", [string, string]> = {
-  trained: [s.pillOk, "Trained"],
-  training: [s.pillWarn, "Training"],
-  queued: [s.pillNeutral, "Queued"],
-  failed: [s.pillBad, "Failed"],
-  active: [s.pillAccent, "Active"],
+export type Tone = "ok" | "warn" | "bad" | "neutral" | "accent" | "admin";
+
+const TONE: Record<Tone, string> = {
+  ok: s.pillOk,
+  warn: s.pillWarn,
+  bad: s.pillBad,
+  neutral: s.pillNeutral,
+  accent: s.pillAccent,
+  admin: s.pillAdmin,
 };
 
-export function StatusPill({ state }: { state: ModelState | "active" }) {
-  const [cls, label] = PILL[state];
+/** Figma "Tag" / status pill */
+export function Pill({ tone = "neutral", small, children }: { tone?: Tone; small?: boolean; children: ReactNode }) {
+  return <span className={cx(s.pill, TONE[tone], small && s.pillSmall)}>{children}</span>;
+}
+
+export const CONF_TONE: Record<Confidence, Tone> = { high: "ok", medium: "warn", low: "neutral" };
+export const confLabel = (c: Confidence) => c[0].toUpperCase() + c.slice(1);
+
+export function Toggle({
+  checked,
+  onChange,
+  label,
+  disabled,
+  tone = "accent",
+}: {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+  disabled?: boolean;
+  tone?: "accent" | "admin";
+}) {
   return (
-    <span className={cx(s.pill, cls)}>
-      {state === "training" && <span className={s.pulse} aria-hidden />}
-      {label}
-    </span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      className={cx(s.toggle, checked && s.toggleOn, tone === "admin" && s.toggleAdmin)}
+      onClick={() => onChange(!checked)}
+    />
   );
 }
 
-const CONF_COLOR: Record<Confidence, string> = { high: "var(--ok)", medium: "var(--golden)", low: "var(--pin-idle)" };
-
-export function Estimated({ confidence }: { confidence?: Confidence }) {
+/** Labelled form field (Figma inputs: 13px label above a 46px box) */
+export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <span className={s.estimated} title="Predicted from check-ins, not official data">
-      {confidence && <span className={s.confDot} style={{ background: CONF_COLOR[confidence] }} aria-hidden />}
-      Estimated{confidence ? ` · ${confidence} confidence` : ""}
-    </span>
+    <label className={cx(s.field, className)}>
+      <span className={s.fieldLabel}>{label}</span>
+      {children}
+      {hint && <span className={s.fieldHint}>{hint}</span>}
+    </label>
+  );
+}
+
+export const inputClass = s.input;
+
+/** Centered dialog over a dimmed backdrop; Escape closes it when onClose is given */
+export function Modal({ title, icon, onClose, children, labelledBy = "modal-title" }: { title: ReactNode; icon?: ReactNode; onClose?: () => void; children: ReactNode; labelledBy?: string }) {
+  return (
+    <div
+      className={s.backdrop}
+      onKeyDown={(e) => e.key === "Escape" && onClose?.()}
+      onClick={(e) => e.target === e.currentTarget && onClose?.()}
+    >
+      <div className={s.modal} role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1} autoFocus>
+        <h2 id={labelledBy} className={s.modalTitle}>
+          {icon}
+          {title}
+        </h2>
+        {children}
+      </div>
+    </div>
   );
 }

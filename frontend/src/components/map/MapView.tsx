@@ -2,7 +2,7 @@
 
 import maplibregl, { type GeoJSONSource, type LngLatLike, type Map as MLMap } from "maplibre-gl";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { clock, duration, timeRange } from "@/lib/time";
+import { clock, duration, hoursText, timeRange } from "@/lib/time";
 import type { Place, Point } from "@/lib/types";
 import { applyPalette, BASE_STYLE, FALLBACK_STYLE } from "./style";
 import s from "./map.module.css";
@@ -34,7 +34,7 @@ const ROUTE = "ct-route";
 const ROUTE_ACTIVE = "ct-route-active";
 
 function cardContent(p: Place, hint?: string): HTMLElement {
-  const conf = { high: "#137333", medium: "#b06000", low: "#9aa0a6" }[p.confidence] ?? "#9aa0a6";
+  const conf = { high: "#137333", medium: "#b06000", low: "#9aa0a6" }[p.conf_m2 ?? p.confidence] ?? "#9aa0a6";
   const card = document.createElement("div");
   const score = document.createElement("span");
   score.className = "ct-card-score";
@@ -46,7 +46,7 @@ function cardContent(p: Place, hint?: string): HTMLElement {
   title.textContent = `${p.label} · ${p.ward}`;
   card.append(title);
 
-  for (const text of [`~${duration(p.duration)} · best ${timeRange(p.golden_start, p.golden_end)}`, `Open ${timeRange(p.open_min, p.close_min)} (from check-ins)`]) {
+  for (const text of [`~${duration(p.duration)} · best ${timeRange(p.golden_start, p.golden_end)}`, hoursText(p)]) {
     const meta = document.createElement("div");
     meta.className = "ct-card-meta";
     meta.textContent = text;
@@ -60,7 +60,7 @@ function cardContent(p: Place, hint?: string): HTMLElement {
   dot.style.height = "6px";
   dot.style.borderRadius = "50%";
   dot.style.background = conf;
-  estimate.append(dot, document.createTextNode(`Estimated · ${p.confidence} confidence`));
+  estimate.append(dot, document.createTextNode(`Estimated · ${p.conf_m2 ?? p.confidence} confidence`));
   card.append(estimate);
 
   if (hint) {
@@ -217,7 +217,7 @@ export default function MapView(props: MapViewProps) {
       placeIndex.current.get(hoveredId) ??
       routes?.flatMap((r) => r.stops).find((x) => x.place.id === hoveredId)?.place;
     if (!p) return;
-    const hint = cb.current.onPlaceClick ? (selectedIds?.has(p.id) ? "Click to remove" : "Click to add") : undefined;
+    const hint = cb.current.onPlaceClick ? "Click for details" : undefined;
     popup.current = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 16, className: "ct-popup", maxWidth: "260px" })
       .setLngLat([p.lon, p.lat])
       .setDOMContent(cardContent(p, hint))
@@ -254,21 +254,22 @@ export default function MapView(props: MapViewProps) {
     stopMarkers.current = [];
     const others = map.getSource(ROUTE) as GeoJSONSource | undefined;
     const active = map.getSource(ROUTE_ACTIVE) as GeoJSONSource | undefined;
-    if (!routes || !stay) {
+    if (!routes) {
       others?.setData({ type: "FeatureCollection", features: [] });
       active?.setData({ type: "FeatureCollection", features: [] });
       return;
     }
-    const home: [number, number] = [stay.lon, stay.lat];
+    // a shared trip has no stay: draw the stops only
+    const home: [number, number][] = stay ? [[stay.lon, stay.lat]] : [];
     const line = (r: RouteDay) => ({
       type: "Feature" as const,
       properties: {},
       geometry: {
         type: "LineString" as const,
-        coordinates: [home, ...r.stops.map((x) => [x.place.lon, x.place.lat] as [number, number]), home],
+        coordinates: [...home, ...r.stops.map((x) => [x.place.lon, x.place.lat] as [number, number]), ...home],
       },
     });
-    const withStops = routes.filter((r) => r.stops.length);
+    const withStops = routes.filter((r) => r.stops.length > 0 && r.stops.length + home.length * 2 >= 2); // a line needs 2 points
     others?.setData({ type: "FeatureCollection", features: withStops.filter((r) => r.day !== activeDay).map(line) });
     active?.setData({ type: "FeatureCollection", features: withStops.filter((r) => r.day === activeDay).map(line) });
     routes.forEach((r) =>
