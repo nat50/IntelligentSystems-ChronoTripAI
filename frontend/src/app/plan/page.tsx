@@ -1,5 +1,5 @@
-import { PlacesScreen } from "@/features/places/PlacesScreen";
+import { TripSetupScreen } from "@/features/setup/TripSetupScreen";
 
-export default function PlacesPage() {
-  return <PlacesScreen />;
+export default function TripSetupPage() {
+  return <TripSetupScreen />;
 }

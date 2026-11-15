@@ -4,54 +4,67 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PlaceRow } from "@/components/app/PlaceRow";
-import { CitySelect, TopBar } from "@/components/app/TopBar";
-import { Button, cx, DayPicker, Slider } from "@/components/ui";
+import { TopBar } from "@/components/app/TopBar";
+import { Button, cx } from "@/components/ui";
 import { api } from "@/lib/api";
-import { clock } from "@/lib/time";
-import { MAX_PLACES, useTrip } from "@/lib/trip-store";
-import type { Group, Place } from "@/lib/types";
+import { duration } from "@/lib/time";
+import { INTERESTS, MAX_PLACES, useTrip } from "@/lib/trip-store";
+import type { Interest, Place } from "@/lib/types";
+import { planNav, TripSummary } from "../plan-nav";
 import s from "../screen.module.css";
+import { PlaceDetailPanel } from "./PlaceDetailPanel";
 
 const MapView = dynamic(() => import("@/components/map/MapView"), { ssr: false });
 
-const FILTERS: { key: Group | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "sightseeing", label: "Sights" },
-  { key: "food", label: "Food" },
-  { key: "entertainment", label: "Fun" },
-  { key: "shopping", label: "Shopping" },
-  { key: "nightlife", label: "Night" },
-];
-
-const SLOTS = Array.from({ length: 39 }, (_, i) => 5 * 60 + i * 30); // 05:00 … 24:00
-
-const paceLabel = (v: number) => (v < 0.34 ? "Relaxed" : v > 0.66 ? "Packed" : "Balanced");
+const matches = (p: Place, filter: Interest | "all", text: string) =>
+  (filter === "all" || !p.interest || p.interest === filter) &&
+  (!text || `${p.label} ${p.ward} ${p.category}`.toLowerCase().includes(text));
 
 export function PlacesScreen() {
   const router = useRouter();
-  const { state, dispatch, cities, optimize, optimizing, error, clearError, hydrated } = useTrip();
-  const [inView, setInView] = useState<Place[]>([]);
+  const { state, dispatch, cities, optimize, error, clearError, hydrated } = useTrip();
+  const [found, setFound] = useState<Place[]>([]);
   const [bbox, setBbox] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Group | "all">("all");
+  const [filter, setFilter] = useState<Interest | "all">("all");
+  const [query, setQuery] = useState("");
   const [hovered, setHovered] = useState<number | null>(null);
-  const [more, setMore] = useState(false);
+  const [openId, setOpenId] = useState<number | null>(null);
   const [suggesting, setSuggesting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const city = cities.find((c) => c.name === state.city);
   const selectedIds = useMemo(() => new Set(state.selected.map((p) => p.id)), [state.selected]);
+  const mustIds = useMemo(() => new Set(state.mustVisit), [state.mustVisit]);
+  const text = query.trim().toLowerCase();
 
-  // candidates inside the visible map area (debounced)
+  // D2 "Open in traveler view" links here with ?place=<id>
+  useEffect(() => {
+    if (!hydrated) return;
+    const id = Number(new URLSearchParams(window.location.search).get("place"));
+    if (!id) return;
+    api
+      .place(id)
+      .then((p) => {
+        if (p.city !== state.city) dispatch({ type: "city", city: p.city });
+        setOpenId(p.id);
+      })
+      .catch(() => {});
+    // once, after the trip is restored
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  // candidates: search text over the whole city, otherwise the visible map area
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    if (!bbox) return;
+    if (!bbox && !text) return;
     clearTimeout(timer.current);
     let alive = true;
+    const interest = filter === "all" ? undefined : [filter];
     timer.current = setTimeout(() => {
       api
-        .places(state.city, { bbox, limit: 400 })
+        .places(state.city, text ? { q: text, interest, limit: 60 } : { bbox: bbox!, interest, limit: 400 })
         .then((list) => {
           if (!alive) return;
-          setInView(list);
+          setFound(list);
           setLoadError(null);
         })
         .catch((e: Error) => alive && setLoadError(e.message));
@@ -60,22 +73,20 @@ export function PlacesScreen() {
       alive = false;
       clearTimeout(timer.current);
     };
-  }, [bbox, state.city]);
+  }, [bbox, text, filter, state.city]);
 
   const mapPlaces = useMemo(() => {
-    const ids = new Set(inView.map((p) => p.id));
-    return [...inView, ...state.selected.filter((p) => !ids.has(p.id))];
-  }, [inView, state.selected]);
+    const ids = new Set(found.map((p) => p.id));
+    return [...found, ...state.selected.filter((p) => !ids.has(p.id))];
+  }, [found, state.selected]);
 
-  const candidates = useMemo(
-    () => inView.filter((p) => !selectedIds.has(p.id) && (filter === "all" || p.group === filter)),
-    [inView, selectedIds, filter],
-  );
+  const yours = state.selected.filter((p) => matches(p, filter, text));
+  const candidates = found.filter((p) => !selectedIds.has(p.id)).slice(0, 60);
 
   const suggest = async () => {
     setSuggesting(true);
     try {
-      dispatch({ type: "add", places: await api.suggest(state.city, 8) });
+      dispatch({ type: "add", places: await api.suggest(state.city, 8, state.interests.length ? state.interests : undefined) });
     } catch (e) {
       setLoadError((e as Error).message);
     } finally {
@@ -83,148 +94,84 @@ export function PlacesScreen() {
     }
   };
 
-  const build = async () => {
-    const it = await optimize({ seed: false });
-    if (it) router.push("/plan/itinerary");
+  const build = () => {
+    void optimize({ seed: false });
+    router.push("/plan/itinerary");
   };
 
-  const short = state.city === "Ho Chi Minh City" ? "HCMC" : state.city;
   const full = state.selected.length >= MAX_PLACES;
+  const visit = state.selected.reduce((sum, p) => sum + p.duration, 0);
+  const perDay = state.dayEnd - state.dayStart;
+  const available = perDay * state.days;
+  const share = Math.min(1, visit / Math.max(available, 1));
 
   return (
     <div className={s.screen}>
-      <TopBar
-        items={[
-          { href: "/plan", label: "Places" },
-          { href: "/plan/itinerary", label: "Itinerary", disabled: !state.itinerary },
-        ]}
-        active="/plan"
-        right={
-          <CitySelect value={state.city} options={cities.map((c) => c.name)} onChange={(c) => dispatch({ type: "city", city: c })} />
-        }
-      />
+      <TopBar items={planNav(state, "/plan/places")} active="/plan/places" right={<TripSummary state={state} />} />
       <div className={s.body}>
         <aside className={s.panel}>
           <div>
             <h1 className={s.h1}>Pick places</h1>
             <p className={s.sub}>
-              {short} · <span className={s.count}>{state.selected.length}</span> of {MAX_PLACES} selected
+              <span className={s.count}>{state.selected.length}</span> selected for {state.days} {state.days === 1 ? "day" : "days"} ·{" "}
+              {MAX_PLACES} places max · sorted by popularity
             </p>
           </div>
 
-          <section className={s.trip} aria-label="Trip settings">
-            <div className={s.row}>
-              <span>Days</span>
-              <DayPicker value={state.days - 1} onChange={(d) => dispatch({ type: "days", days: d + 1 })} />
-            </div>
-            <div className={s.row}>
-              <span>Each day</span>
-              <span className={s.hours}>
-                <select
-                  className={s.timeInput}
-                  aria-label="Day starts"
-                  value={state.dayStart}
-                  onChange={(e) => dispatch({ type: "hours", dayStart: Number(e.target.value), dayEnd: Math.max(state.dayEnd, Number(e.target.value) + 120) })}
-                >
-                  {SLOTS.filter((m) => m <= 20 * 60).map((m) => (
-                    <option key={m} value={m}>
-                      {clock(m)}
-                    </option>
-                  ))}
-                </select>
-                –
-                <select
-                  className={s.timeInput}
-                  aria-label="Day ends"
-                  value={state.dayEnd}
-                  onChange={(e) => dispatch({ type: "hours", dayStart: state.dayStart, dayEnd: Number(e.target.value) })}
-                >
-                  {SLOTS.filter((m) => m >= state.dayStart + 120).map((m) => (
-                    <option key={m} value={m}>
-                      {clock(m)}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </div>
-            <div className={s.sliderBlock}>
-              <div className={s.row}>
-                <span>Pace</span>
-                <span className={s.rowValue}>{paceLabel(state.prefs.pace)}</span>
-              </div>
-              <Slider label="Pace" value={state.prefs.pace} onChange={(v) => dispatch({ type: "prefs", prefs: { pace: v } })} />
-            </div>
-            {more && (
-              <>
-                <div className={s.sliderBlock}>
-                  <div className={s.row}>
-                    <span>Travel</span>
-                  </div>
-                  <Slider label="Travel" value={state.prefs.travel} onChange={(v) => dispatch({ type: "prefs", prefs: { travel: v } })} />
-                  <div className={s.scale}>
-                    <span>Go anywhere</span>
-                    <span>Keep it close</span>
-                  </div>
-                </div>
-                <div className={s.sliderBlock}>
-                  <div className={s.row}>
-                    <span>Hours &amp; meals</span>
-                  </div>
-                  <Slider
-                    label="Opening hours and meals"
-                    value={state.prefs.strictness}
-                    onChange={(v) => dispatch({ type: "prefs", prefs: { strictness: v } })}
-                  />
-                  <div className={s.scale}>
-                    <span>Flexible</span>
-                    <span>Strict</span>
-                  </div>
-                </div>
-              </>
-            )}
-            <button type="button" className={s.more} onClick={() => setMore((m) => !m)} aria-expanded={more}>
-              {more ? "Fewer preferences" : "More preferences"}
-            </button>
-          </section>
+          <label className={s.search}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              type="search"
+              placeholder="Search places or areas"
+              aria-label="Search places or areas"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
 
           <div className={s.toolbar}>
-            {FILTERS.map((f) => (
-              <button key={f.key} type="button" className={cx(s.chip, filter === f.key && s.chipOn)} onClick={() => setFilter(f.key)}>
+            {[{ key: "all" as const, label: "All" }, ...INTERESTS].map((f) => (
+              <button key={f.key} type="button" aria-pressed={filter === f.key} className={cx(s.chip, filter === f.key && s.chipOn)} onClick={() => setFilter(f.key)}>
                 {f.label}
               </button>
             ))}
-            <span className={s.toolbarEnd}>
-              <Button variant="ghost" onClick={suggest} loading={suggesting} disabled={full}>
-                ✦ Suggest
-              </Button>
-            </span>
+            <Button variant="ghost" onClick={suggest} loading={suggesting} disabled={full} className={s.toolbarEnd}>
+              ✦ Suggest
+            </Button>
           </div>
 
           <div className={s.list} data-lenis-prevent>
-            {state.selected.length > 0 && <p className={s.listLabel}>Your places</p>}
-            {state.selected.map((p) => (
+            {yours.map((p) => (
               <PlaceRow
                 key={p.id}
                 place={p}
                 selected
+                must={mustIds.has(p.id)}
+                active={openId === p.id}
                 hovered={hovered === p.id}
                 onToggle={() => dispatch({ type: "toggle", place: p })}
+                onOpen={() => setOpenId(p.id)}
                 onHover={setHovered}
               />
             ))}
-            <p className={s.listLabel}>On the map · by score</p>
-            {candidates.slice(0, 60).map((p) => (
+            {candidates.length > 0 && <p className={s.listLabel}>{text ? "Search results" : "On the map · by popularity"}</p>}
+            {candidates.map((p) => (
               <PlaceRow
                 key={p.id}
                 place={p}
                 selected={false}
+                active={openId === p.id}
                 hovered={hovered === p.id}
                 onToggle={() => dispatch({ type: "toggle", place: p })}
+                onOpen={() => setOpenId(p.id)}
                 onHover={setHovered}
               />
             ))}
-            {hydrated && candidates.length === 0 && (
-              <p className={s.empty}>{loadError ?? "No places here — move or zoom the map."}</p>
+            {hydrated && yours.length + candidates.length === 0 && (
+              <p className={s.empty}>{loadError ?? (text ? "No place matches your search." : "No places here — move or zoom the map.")}</p>
             )}
           </div>
 
@@ -237,9 +184,20 @@ export function PlacesScreen() {
                 </button>
               </div>
             )}
+            <div className={s.budget}>
+              <span>Visit time of selected</span>
+              <strong>{duration(visit)}</strong>
+              <span>
+                Available ({state.days} × {duration(perDay)})
+              </span>
+              <strong>{duration(available)}</strong>
+              <span className={s.budgetBar} role="progressbar" aria-label="Share of available time" aria-valuenow={Math.round(share * 100)} aria-valuemin={0} aria-valuemax={100}>
+                <span style={{ width: `${share * 100}%` }} data-over={visit > available || undefined} />
+              </span>
+            </div>
             {full && <p className={s.meta}>That&apos;s the maximum of {MAX_PLACES} places for one trip.</p>}
-            <Button block onClick={build} loading={optimizing} disabled={state.selected.length === 0 || !state.stay}>
-              {optimizing ? "Optimizing…" : "Build itinerary"}
+            <Button block onClick={build} disabled={state.selected.length === 0 || !state.stay}>
+              Build itinerary
             </Button>
           </div>
         </aside>
@@ -252,13 +210,36 @@ export function PlacesScreen() {
               selectedIds={selectedIds}
               hoveredId={hovered}
               onHover={setHovered}
-              onPlaceClick={(p) => dispatch({ type: "toggle", place: p })}
+              onPlaceClick={(p) => setOpenId(p.id)}
               stay={state.stay}
-              onStayChange={(stay) => dispatch({ type: "stay", stay })}
+              onStayChange={(stay) => dispatch({ type: "stay", stay: { ...stay, label: state.stay?.label ?? stay.label } })}
               onBoundsChange={setBbox}
             />
           )}
+          <div className={s.legend} aria-hidden>
+            <span>
+              <i className={s.dotSelected} /> Selected
+            </span>
+            <span>
+              <i className={s.dotIdle} /> Not selected
+            </span>
+            <span>
+              <i className={s.dotStay} /> Stay (H)
+            </span>
+          </div>
         </div>
+
+        {openId != null && (
+          <PlaceDetailPanel
+            id={openId}
+            selected={selectedIds.has(openId)}
+            must={mustIds.has(openId)}
+            full={full}
+            onToggle={(p) => dispatch({ type: "toggle", place: p })}
+            onMust={(p, on) => dispatch({ type: "mustVisit", place: p, on })}
+            onClose={() => setOpenId(null)}
+          />
+        )}
       </div>
     </div>
   );

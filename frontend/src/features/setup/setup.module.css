@@ -1,0 +1,248 @@
+/* Figma T1 · Trip setup (100:114) */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 560px;
+  gap: 64px;
+  align-items: center;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 40px 40px 120px;
+}
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 560px;
+}
+.eyebrow {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.h1 {
+  font-weight: 700;
+  font-size: 52px;
+  line-height: 1.1;
+  letter-spacing: -1.2px;
+}
+.lead {
+  font-size: 18px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.steps {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.steps li {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.steps li > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.steps strong {
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink);
+}
+.stepNo {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sheet);
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 13, 20, 0.06);
+}
+.h2 {
+  font-weight: 700;
+  font-size: 24px;
+}
+.sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.withAction {
+  position: relative;
+  display: block;
+}
+.withAction select {
+  padding-right: 80px;
+  cursor: pointer;
+}
+.action {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--accent);
+  pointer-events: none;
+}
+.fakeInput {
+  position: relative;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  cursor: pointer;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 46px;
+  padding: 0 6px;
+  border: 1px solid #8a868c;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.stepper button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 16px;
+  font-weight: 600;
+}
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.label {
+  font-weight: 500;
+  font-size: 13px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.segment {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg);
+}
+.segment button {
+  height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--muted);
+}
+.segment .segmentOn {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 13, 20, 0.08);
+}
+.more {
+  align-self: flex-start;
+  margin-top: -6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+}
+.moreBox {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--r-card);
+  background: var(--bg);
+}
+.scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.stayMap {
+  height: 280px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .main {
+    grid-template-columns: 1fr;
+    padding: 32px 24px;
+    gap: 32px;
+  }
+  .intro {
+    max-width: none;
+  }
+  .h1 {
+    font-size: 40px;
+  }
+}
+@media (max-width: 560px) {
+  .main {
+    padding: 24px 16px;
+  }
+  .card {
+    padding: 20px;
+  }
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+  .h1 {
+    font-size: 32px;
+  }
+}
