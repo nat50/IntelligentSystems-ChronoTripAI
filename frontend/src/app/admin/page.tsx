@@ -1,4 +1,4 @@
-import { DataScreen } from "@/features/admin/AdminScreens";
+import { DataScreen } from "@/features/admin/DataScreen";
 
 export default function AdminDataPage() {
   return <DataScreen />;

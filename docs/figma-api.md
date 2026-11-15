@@ -71,8 +71,8 @@ Trong 38 thành phần Figma ở hai bảng trên:
 - **2 ❌** chưa có: xuất PDF (để frontend dùng chức năng in của trình duyệt) và "Add source" ở D1.
 
 Như vậy API đã đủ để dựng **phần lớn** các màn Figma. Ba điều cần lưu ý:
-1. Frontend chưa được sửa để gọi các API này (§5).
-2. Mọi API mới mới được kiểm tra bằng test tự động trên dữ liệu mẫu, chưa chạy trên dataset thật và chưa chạy với một frontend thật.
+1. Frontend đã gọi các API này (15/11/2026, §5): T1–T4 ở `/plan`, `/plan/places`, `/plan/itinerary`, `/plan/trips`, trang chia sẻ `/t/[slug]`; D1–D4 ở `/admin`, `/admin/places`, `/admin/models`, `/admin/optimizer`. Đăng nhập của Traveler là mock, chỉ lưu trong trình duyệt (`frontend/src/lib/account.ts`).
+2. Mọi API mới đã chạy với frontend thật trên dữ liệu mẫu (`--sample`), chưa chạy trên dataset thật.
 3. Các con số trên mockup (MAE 11.8 phút, "214 saved trips"…) là số minh hoạ; số thật phụ thuộc vào dữ liệu.
 
 ## 2. Thay đổi trên endpoint cũ (đều tương thích ngược)

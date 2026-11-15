@@ -42,7 +42,7 @@ Tests: `cd backend && ../.venv/Scripts/python -m pytest -q` (solver + API, uses 
 Other entry points (run these from `backend/`): `python -m ml.download` (dataset only), `python -m ml.hours --raw data/raw` (crawl real opening hours from OpenStreetMap, optional, before training), `python -m ml.pipeline --raw data/raw` (retrain).
 
 Model changes and the API contract for the frontend: [docs/model-changes.md](docs/model-changes.md), [docs/frontend-integration.md](docs/frontend-integration.md), and the Figma screen-by-screen API map: [docs/figma-api.md](docs/figma-api.md).
-The admin screen (`/admin`) can also download the dataset, train a new version and activate it.
+Web routes (Figma screens): T1 trip setup `/plan` → T2 pick places `/plan/places` → T3 itinerary `/plan/itinerary` → T4 saved trips `/plan/trips`, read-only share link `/t/<slug>`. Data console: D1 `/admin`, D2 `/admin/places`, D3 `/admin/models`, D4 `/admin/optimizer` (D1 can also download the dataset and run the pipeline). Traveler sign-in is a front-end mock for now; saved trips work without an account. Frontend unit tests: `cd frontend && npm test`.
 
 ### Configuration (`backend/.env` or environment, prefix `CHRONOTRIP_`)
 
